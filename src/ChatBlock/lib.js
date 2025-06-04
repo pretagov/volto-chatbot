@@ -377,7 +377,7 @@ export async function* updateCurrentMessageFIFO(
   }
 }
 
-export async function useScrollonStream({
+export function useScrollonStream({
   isStreaming,
   scrollableDivRef,
   scrollDist,
