@@ -6,15 +6,15 @@ let last_fetched = null;
 let maxAge;
 
 const MSG_INVALID_CONFIGURATION =
-  'Invalid configuration: missing DANSWER username and password';
+  'Invalid configuration: missing ONYX api key';
 const MSG_FETCH_COOKIE = 'Error while fetching authentication cookie';
 const MSG_ERROR_REQUEST = 'Error in processing request to Danswer';
 
 async function get_login_cookie(username, password) {
   const url = `${process.env.DANSWER_URL}/api/auth/login`;
   const data = {
-    username,
-    password,
+    username: username,
+    password: password,
     scope: '',
     client_id: '',
     client_secret: '',
@@ -61,22 +61,22 @@ async function check_credentials() {
   return await fetch(reqUrl, options);
 }
 
-async function send_danswer_request(req, res, { username, password, url }) {
-  await login(username, password);
+async function send_danswer_request(req, res, { api_key, url }) {
+  // await login(username, password);
 
-  try {
-    const resp = await check_credentials();
-    if (resp.status !== 200) {
-      await getAuthCookie(username, password);
-    }
-  } catch (error) {
-    await getAuthCookie(username, password);
-  }
+  // try {
+  //   const resp = await check_credentials();
+  //   if (resp.status !== 200) {
+  //     await getAuthCookie(username, password);
+  //   }
+  // } catch (error) {
+  //   await getAuthCookie(username, password);
+  // }
 
   const options = {
     method: req.method,
     headers: {
-      Cookie: cached_auth_cookie,
+      'Authorization': "Bearer "+api_key,
       'Content-Type': 'application/json',
     },
   };
@@ -87,11 +87,13 @@ async function send_danswer_request(req, res, { username, password, url }) {
   try {
     const response = await fetch(url, options, req.body);
 
-    if (response.headers.get('transfer-encoding') === 'chunked') {
-      res.set('Content-Type', 'text/event-stream');
-    } else {
-      res.set('Content-Type', 'application/json');
-    }
+    // if (response.headers.get('transfer-encoding') === 'chunked') {
+    //   res.set('Content-Type', 'text/event-stream');
+    // } else {
+    //   res.set('Content-Type', 'application/json');
+    // }
+    res.set('Content-Type', response.headers.get('Content-Type'));
+    //res.set('Content-Encoding', response.headers.get('Content-Encoding'));
 
     response.body.pipe(res);
   } catch (error) {
@@ -104,10 +106,11 @@ export default async function middleware(req, res, next) {
 
   const reqUrl = `${process.env.DANSWER_URL}/api${path}`;
 
-  const username = process.env.DANSWER_USERNAME;
-  const password = process.env.DANSWER_PASSWORD;
+  // const username = process.env.DANSWER_USERNAME;
+  // const password = process.env.DANSWER_PASSWORD;
+  const api_key = process.env.ONYX_API_KEY;
 
-  if (!(username && password)) {
+  if (!(api_key)) {
     res.send({
       error: MSG_INVALID_CONFIGURATION,
     });
@@ -115,7 +118,7 @@ export default async function middleware(req, res, next) {
   }
 
   try {
-    await send_danswer_request(req, res, { url: reqUrl, username, password });
+    await send_danswer_request(req, res, { url: reqUrl, api_key });
   } catch (error) {
     // eslint-disable-next-line
     console.error(MSG_ERROR_REQUEST, error?.response?.text);

@@ -169,7 +169,9 @@ export async function* sendMessage({
       chat_session_id: chatSessionId,
       parent_message_id: parentMessageId,
       message: message,
-      prompt_id: promptId,
+      prompt_id: null,
+      regenerate: false,
+      use_agentic_search: false,
       search_doc_ids: documentsAreSelected ? selectedDocumentIds : null,
       file_descriptors: fileDescriptors,
       retrieval_options: !documentsAreSelected
