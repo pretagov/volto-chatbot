@@ -1,5 +1,5 @@
 import React from 'react';
-import { dequal } from 'dequal';
+import dequal from 'dequal';
 
 export function useDeepCompareMemoize(dependencies) {
   const dependenciesRef = React.useRef(dependencies);

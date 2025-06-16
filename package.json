@@ -78,6 +78,9 @@
     "react-textarea-autosize": "^8.5.3",
     "rehype-prism-plus": "1.6.0",
     "remark-gfm": "3.0.1",
-    "uuid": "10.0.0"
+    "uuid": "10.0.0",
+    "@plone/volto": "18.22.0",
+    "unist-util-visit": "5.0.0",
+    "dequal": "1.0.0"
   }
 }
