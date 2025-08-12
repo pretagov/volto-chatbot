@@ -1,10 +1,26 @@
 #chatbot-sidebar {
+  ul[role="list"] {
+    list-style-type: none;
+  }
+  .all-sources-display {
+    h2 {
+      margin-block-end: 0;
+    }
+    li {
+      --spacing: 30px;
+      margin-block-start: 10px;
+      border-radius: var(--spacing);
+      padding: calc(var(--spacing) / 2);
+      border-style: solid;
+      border-color: lightblue;
+      border-width: 2px;
+    }
+  }
   dialog {
     background: white;
     padding: 20px;
     height: 100%;
     max-height: 100vh;
-    width: min(120ch, 100vw);
     max-width: 100vw;
     margin-block: 0;
     margin-inline-start: 0;
@@ -14,11 +30,33 @@
       background-color: rgba(0, 32, 74, 0.5);
     }
   }
-  .dialogContent {
+  .dialog-content {
     height: 100%;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
   }
+  .dialog-main {
+    display: flex;
+    flex-direction: column;
+    width: min(88ch, 100vw);
+    height: 100%;
+  }
+  .dialog-side,
+  dialog-side__wrapper {
+    height: 100%;
+    max-width: 12vw;
+  }
+  .dialog-side::before {
+    content: "";
+    border: 1px lightblue solid;
+    position: absolute;
+    margin-inline: 10px;
+    height: 100vh;
+    // height: 40%;
+    // top: 20%;
+    // transform: translateY(20%);
+  }
+
   .heading {
     display: flex;
     flex-direction: row-reverse;
