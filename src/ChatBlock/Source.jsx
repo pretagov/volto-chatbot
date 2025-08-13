@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Popup } from 'semantic-ui-react';
 import { SVGIcon } from './utils';
 
@@ -5,6 +6,24 @@ import FileIcon from './../icons/file.svg';
 import GlobeIcon from './../icons/globe.svg';
 
 import { injectLazyLibs } from '@plone/volto/helpers/Loadable/Loadable';
+
+function Icon({ source_type }) {
+  if (source_type === 'web') {
+    return <SVGIcon name={GlobeIcon} size="15" alt="Web icon" />;
+  }
+  if (source_type === 'file') {
+    return <SVGIcon name={FileIcon} size="15" alt="File icon" />;
+  }
+  return null;
+}
+
+function LinkedSource({ link, children }) {
+  return (
+    <a href={link} rel="noreferrer" target="_blank" className="source-link">
+      {children}
+    </a>
+  );
+}
 
 const SourceDetails_ = ({ source, index, luxon }) => {
   const {
@@ -17,51 +36,14 @@ const SourceDetails_ = ({ source, index, luxon }) => {
   const parsedDate = updated_at ? luxon.DateTime.fromISO(updated_at) : null;
   const relativeTime = parsedDate?.toRelative();
   const isLinkType = source_type === 'web';
-  const isDocumentType = source_type === 'file';
 
-  const renderIcon = () => {
-    if (isLinkType) {
-      return <SVGIcon name={GlobeIcon} size="15" alt="Web icon" />;
-    }
-    if (isDocumentType) {
-      return <SVGIcon name={FileIcon} size="15" alt="File icon" />;
-    }
-    return null;
-  };
-
-  const sourceContent = (
-    <>
-      {updated_at && (
-        <div className="source-date">
-          <span>{relativeTime}</span>
-        </div>
-      )}
-      {blurb && (
-        <div className="source-desc">
-          <span>{blurb}</span>
-        </div>
-      )}
-    </>
-  );
+  const SourceWrapper = isLinkType ? Fragment : LinkedSource;
 
   return (
-    <>
-      {isLinkType ? (
-        <a href={link} rel="noreferrer" target="_blank" className="source-link">
-          <div className="source">
-            <div className="source-header">
-              <span className="chat-citation">{index}</span>
-              <div className="source-title" title={semantic_identifier}>
-                {semantic_identifier}
-              </div>
-              {renderIcon()}
-            </div>
-            {sourceContent}
-          </div>
-        </a>
-      ) : (
-        <div className="source">
-          <div className="source-header">
+    <SourceWrapper link={link}>
+      <div className="source">
+        <div className="source-header">
+          {isLinkType ? (
             <Popup
               on="click"
               wide="very"
@@ -69,15 +51,28 @@ const SourceDetails_ = ({ source, index, luxon }) => {
               trigger={<span className="chat-citation">{index}</span>}
               popper={{ id: 'chat-citation-popup' }}
             />
-            <div className="source-title" title={semantic_identifier}>
-              {semantic_identifier}
-            </div>
-            {renderIcon()}
+          ) : (
+            <span className="chat-citation">{index}</span>
+          )}
+          <div className="source-title" title={semantic_identifier}>
+            {semantic_identifier}
           </div>
-          {sourceContent}
+          <Icon source_type={source_type} />
         </div>
-      )}
-    </>
+        <>
+          {updated_at && (
+            <div className="source-date">
+              <span>{relativeTime}</span>
+            </div>
+          )}
+          {blurb && (
+            <div className="source-desc">
+              <span>{blurb}</span>
+            </div>
+          )}
+        </>
+      </div>
+    </SourceWrapper>
   );
 };
 
