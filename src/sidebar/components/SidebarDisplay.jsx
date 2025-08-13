@@ -6,10 +6,13 @@ import { Button } from "semantic-ui-react";
 
 // ChatBlock
 import { getBlocksFieldname } from "@plone/volto/helpers";
-import clearSVG from "@plone/volto/icons/clear.svg";
-import { forwardRef, Fragment } from "react";
+import { injectLazyLibs } from "@plone/volto/helpers/Loadable/Loadable";
+import { forwardRef, useState } from "react";
 import superagent from "superagent";
 import withDanswerData from "../../ChatBlock/withDanswerData";
+
+import backSVG from "@plone/volto/icons/back.svg";
+import clearSVG from "@plone/volto/icons/clear.svg";
 
 import config from "@plone/registry";
 
@@ -26,7 +29,10 @@ const ChatBlockDisplay = withDanswerData(({ assistant }) => [
   return <ChatWindow persona={assistantData} {...data} />;
 });
 
-function SideContent() {
+const SideContent = injectLazyLibs(["luxon"])(function SideContent({
+  hideSidebar,
+  luxon,
+}) {
   const sources = [
     {
       document_id: "https://www.bathnes.gov.uk/paying-your-council-tax",
@@ -83,26 +89,45 @@ function SideContent() {
     },
   ];
   return (
-    <ul role="list" className="all-sources-display">
-      {sources.map((source, index) => {
-        return (
-          <li key={index} className="">
-            <a href={source.link}>
-              <h2>{source.semantic_identifier}</h2>
-            </a>
-            <p dangerouslySetInnerHTML={{ __html: source.blurb }}></p>
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <div className="heading">
+        <h2 id="dialog_heading">Sources</h2>
+        <Button
+          type="button"
+          basic
+          aria-label={"Close sources"}
+          onClick={() => {
+            hideSidebar();
+          }}
+        >
+          <Icon circled name={backSVG} size="48px" />
+        </Button>
+      </div>
+      <ul role="list" className="all-sources-display">
+        {sources.map((source, index) => {
+          return (
+            <li key={index} className="">
+              <a href={source.link}>
+                <h3>{source.semantic_identifier}</h3>
+              </a>
+              <time dateTime={source.updated_at}>
+                {luxon.DateTime.fromISO(source.updated_at)?.toRelative()}
+              </time>
+              <p dangerouslySetInnerHTML={{ __html: source.blurb }}></p>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
-}
+});
 
 export const SidebarDisplay = forwardRef(function SidebarDisplay(
   { content },
   ref,
 ) {
   const $selectedSidebarChatbot = useStore(selectedSidebarChatbot);
+  const [isSidebarVisible, setSidebarVisible] = useState(false);
 
   const blocksFieldname = getBlocksFieldname(content) || "blocks";
 
@@ -116,8 +141,6 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
     config.settings["volto-chatbot"]?.sidebar?.sidebarTitle ||
     "Help using this site";
 
-  const sideContent = true;
-
   return (
     <>
       <div id="chatbot-sidebar">
@@ -126,34 +149,51 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
           id="chatbot-sidebar-dialog"
           aria-labelledby="dialog_heading"
           ref={ref}
+          data-sidebar-open={isSidebarVisible}
         >
-          <div className="dialog-content">
-            <div className="dialog-main">
-              <div className="heading">
-                <Button
-                  type="button"
-                  basic
-                  aria-label={"Close"}
-                  onClick={() => {
-                    selectedSidebarChatbot.set(null);
-                  }}
-                >
-                  <Icon circled name={clearSVG} size="48px" />
-                </Button>
-                <h2 id="dialog_heading">{sidebarTitle}</h2>
-              </div>
-              <ChatBlockDisplay
-                assistant={$selectedSidebarChatbot}
-                data={sidebarBlockData}
-              />
+          <div className="dialog-main">
+            <div className="heading">
+              {isSidebarVisible ? null : (
+                <>
+                  <Button
+                    type="button"
+                    basic
+                    aria-label={"Close"}
+                    onClick={() => {
+                      selectedSidebarChatbot.set(null);
+                    }}
+                  >
+                    <Icon circled name={clearSVG} size="48px" />
+                  </Button>
+                  <Button
+                    type="button"
+                    basic
+                    aria-label={"Close"}
+                    onClick={() => {
+                      setSidebarVisible(true);
+                    }}
+                  >
+                    Sidebar
+                  </Button>
+                </>
+              )}
+              <h2 id="dialog_heading">{sidebarTitle}</h2>
             </div>
-            {sideContent ? (
-              <div className="dialog-side">
-                <div className="dialog-side__wrapper">
-                  <SideContent />
-                </div>
+            <ChatBlockDisplay
+              assistant={$selectedSidebarChatbot}
+              data={sidebarBlockData}
+            />
+          </div>
+          <div className="dialog-side">
+            <div className="dialog-main">
+              <div className="dialog-side__wrapper">
+                <SideContent
+                  hideSidebar={() => {
+                    setSidebarVisible(false);
+                  }}
+                />
               </div>
-            ) : null}
+            </div>
           </div>
         </dialog>
       </div>
