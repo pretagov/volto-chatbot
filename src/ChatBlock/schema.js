@@ -380,7 +380,7 @@ range is from 0 to 100`,
           ['sidebar', 'In sidebar'],
         ],
         // Simulate default value without actually setting it so it isn't saved in data.
-        placeholder: 'above',
+        placeholder: 'On page',
         noValueOption: false,
       },
       sidebarStartButtonText: {
