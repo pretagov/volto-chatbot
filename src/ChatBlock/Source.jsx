@@ -1,4 +1,3 @@
-import { Fragment } from 'react';
 import { Popup } from 'semantic-ui-react';
 import { SVGIcon } from './utils';
 
@@ -17,12 +16,15 @@ function Icon({ source_type }) {
   return null;
 }
 
-function LinkedSource({ link, children }) {
-  return (
-    <a href={link} rel="noreferrer" target="_blank" className="source-link">
-      {children}
-    </a>
-  );
+function SourceWrapper({ link, isLinkType, children }) {
+  if (isLinkType) {
+    return (
+      <a href={link} rel="noreferrer" target="_blank" className="source-link">
+        {children}
+      </a>
+    );
+  }
+  return children;
 }
 
 const SourceDetails_ = ({ source, index, luxon }) => {
@@ -37,10 +39,8 @@ const SourceDetails_ = ({ source, index, luxon }) => {
   const relativeTime = parsedDate?.toRelative();
   const isLinkType = source_type === 'web';
 
-  const SourceWrapper = isLinkType ? Fragment : LinkedSource;
-
   return (
-    <SourceWrapper link={link}>
+    <SourceWrapper link={link} isLinkType={isLinkType}>
       <div className="source">
         <div className="source-header">
           {isLinkType ? (

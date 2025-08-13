@@ -398,7 +398,7 @@ export function ChatMessageBubble(props) {
                 }}
                 className="floated show-sources-button"
               >
-                <span ariaHidden="true">
+                <span aria-hidden="true">
                   <SVGIcon name={LinkIcon} />
                 </span>
                 {`Sources ${sources.length}`}
