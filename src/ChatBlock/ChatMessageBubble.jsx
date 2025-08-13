@@ -18,6 +18,9 @@ import CopyIcon from './../icons/copy.svg';
 import CheckIcon from './../icons/check.svg';
 import GlassesIcon from './../icons/glasses.svg';
 
+import { sourcesForSelectedMessage } from "#stores/sidebarStore";
+import LinkIcon from "@plone/volto/icons/link.svg";
+
 const CITATION_MATCH = /\[\d+\](?![[(\])])/gm;
 
 const Markdown = loadable(() => import('react-markdown'));
@@ -389,7 +392,17 @@ export function ChatMessageBubble(props) {
 
           {showSources && (
             <>
-              <h5>Sources:</h5>
+              <Button
+                onClick={() => {
+                  sourcesForSelectedMessage.set(sources);
+                }}
+                className="floated show-sources-button"
+              >
+                <span ariaHidden="true">
+                  <SVGIcon name={LinkIcon} />
+                </span>
+                {`Sources ${sources.length}`}
+              </Button>
               <div className="sources">
                 {sources.map((source, i) => (
                   <SourceDetails source={source} key={i} index={source.index} />

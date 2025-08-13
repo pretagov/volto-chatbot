@@ -67,6 +67,8 @@
     flex-direction: column;
 
     padding: 20px;
+    max-height: 100%;
+    overflow-y: scroll;
   }
 
   .heading {
@@ -94,4 +96,15 @@
 
 body:has(#chatbot-sidebar dialog[open]) {
   overflow: hidden;
+}
+
+// Unfortunately needed for specificity win over Semantic
+.ui.button.show-sources-button {
+  display: inline-flex;
+  align-items: center;
+
+  svg {
+    display: block;
+    margin: 0;
+  }
 }
