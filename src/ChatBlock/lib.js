@@ -320,7 +320,7 @@ export async function fetchRelatedQuestions(message, qgenAsistantId) {
     fileDescriptors: [],
     parentMessageId: null,
     chatSessionId,
-    promptId: 0,
+    promptId: null,
     filters: {},
     selectedDocumentIds: [],
   };
