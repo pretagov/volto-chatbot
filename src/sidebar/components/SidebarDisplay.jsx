@@ -150,6 +150,7 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
           aria-labelledby="dialog_heading"
           ref={ref}
           data-sidebar-open={isSidebarVisible}
+          closedBy="any"
         >
           <div className="dialog-main">
             <div className="heading">
