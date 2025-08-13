@@ -1,4 +1,7 @@
-import { selectedSidebarChatbot } from "#stores/sidebarStore";
+import {
+  selectedSidebarChatbot,
+  sourcesForSelectedMessage,
+} from "#stores/sidebarStore";
 import ChatWindow from "@eeacms/volto-chatbot/ChatBlock/ChatWindow";
 import { useStore } from "@nanostores/react";
 import Icon from "@plone/volto/components/theme/Icon/Icon";
@@ -15,7 +18,8 @@ import clearSVG from "@plone/volto/icons/clear.svg";
 
 import config from "@plone/registry";
 
-import { sourcesForSelectedMessage } from "#stores/sidebarStore";
+import loadable from "@loadable/component";
+const Markdown = loadable(() => import("react-markdown"));
 
 const ChatBlockDisplay = withDanswerData(({ assistant }) => [
   "assistantData",
@@ -60,7 +64,11 @@ const SideContent = injectLazyLibs(["luxon"])(function SideContent({
                 <time dateTime={source.updated_at}>
                   {luxon.DateTime.fromISO(source.updated_at)?.toRelative()}
                 </time>
-                <p dangerouslySetInnerHTML={{ __html: source.blurb }}></p>
+                <Markdown
+                >
+                  {source.blurb}
+                </Markdown>
+                {/* <p dangerouslySetInnerHTML={{ __html: source.blurb }}></p> */}
               </li>
             );
           })}

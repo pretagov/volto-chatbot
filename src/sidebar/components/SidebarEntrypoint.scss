@@ -102,6 +102,8 @@ body:has(#chatbot-sidebar dialog[open]) {
 .ui.button.show-sources-button {
   display: inline-flex;
   align-items: center;
+  padding-block: 8px;
+  padding-inline: 16px;
 
   svg {
     display: block;

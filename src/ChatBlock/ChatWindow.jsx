@@ -182,6 +182,7 @@ function ChatWindow({
                   isFetchingRelatedQuestions={isFetchingRelatedQuestions}
                   enableMatomoTracking={enableMatomoTracking}
                   persona={persona}
+                  blockData={data}
                 />
               ))}
               <div ref={endDivRef} /> {/* End div to mark the bottom */}

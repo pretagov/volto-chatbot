@@ -247,6 +247,7 @@ export function ChatMessageBubble(props) {
     enableShowTotalFailMessage,
     enableMatomoTracking,
     persona,
+    blockData,
   } = props;
   const { remarkGfm } = libs; // , rehypePrism
   const { citations = {}, documents = [], type } = message;
@@ -390,7 +391,7 @@ export function ChatMessageBubble(props) {
               <ToolCall key={index} {...info} />
             ))}
 
-          {showSources && (
+          {showSources && blockData.displayMode === "sidebar" && (
             <>
               <Button
                 onClick={() => {
@@ -403,11 +404,6 @@ export function ChatMessageBubble(props) {
                 </span>
                 {`Sources ${sources.length}`}
               </Button>
-              <div className="sources">
-                {sources.map((source, i) => (
-                  <SourceDetails source={source} key={i} index={source.index} />
-                ))}
-              </div>
             </>
           )}
 
@@ -422,6 +418,12 @@ export function ChatMessageBubble(props) {
           {!isUser && showTotalFailMessage && (
             <Message color="red">{serializeNodes(totalFailMessage)}</Message>
           )}
+
+          <div className="sources">
+            {sources.map((source, i) => (
+              <SourceDetails source={source} key={i} index={source.index} />
+            ))}
+          </div>
 
           {!isUser && (
             <HalloumiFeedback
