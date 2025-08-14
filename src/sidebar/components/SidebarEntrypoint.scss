@@ -6,20 +6,9 @@
   }
 
   .all-sources-display {
-    .all-sources-display__number {
-      border: 1px solid rgb(32, 92, 144);
-      border-radius: 50%;
-      padding: 1em;
-      width: fit-content;
-      height: 100%;
-      font-size: 0.4rem;
-      aspect-ratio: 1 / 1;
-      margin-inline-end: 4px;
-      font-weight: bold;
-
+    .chat-citation {
       float: left;
-      display: inline-flex;
-      align-items: center;
+      margin-inline-end: 4px;
     }
     li {
       padding-block: 16px;

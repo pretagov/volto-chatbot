@@ -59,7 +59,7 @@ const SideContent = injectLazyLibs(["luxon"])(function SideContent({
             return (
               <li key={index} className="">
                 <div className="all-sources-display__header">
-                  <div className="all-sources-display__number">{index + 1}</div>
+                  <div className="chat-citation">{index + 1}</div>
                   <a href={source.link}>
                     <h3>{source.semantic_identifier}</h3>
                   </a>
