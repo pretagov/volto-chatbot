@@ -6,12 +6,36 @@
   }
 
   .all-sources-display {
+    .chat-citation {
+      float: left;
+      margin-inline-end: 4px;
+    }
     li {
-      --spacing: 30px;
-      margin-block-start: 10px;
-      border-radius: var(--spacing);
-      padding: calc(var(--spacing) / 2);
-      // border: solid 2px #e5e5e5;
+      padding-block: 16px;
+
+      h3 {
+        font-size: 1rem;
+        line-height: 1.1;
+        color: #3d5265;
+      }
+      .all-sources-display__description * {
+        font-size: 0.8rem;
+        line-height: 1.1;
+      }
+
+      // Markdown contents
+      .all-sources-display__description {
+        p,
+        li {
+          padding: 0;
+          margin: 0;
+          text-wrap: pretty;
+          word-break: auto-phrase;
+        }
+        ul {
+          list-style: disc;
+        }
+      }
 
       &::after {
         content: "";
@@ -24,10 +48,13 @@
       }
 
       time {
-        border: 1px solid #e5e5e5;
-        border-radius: 1.5rem;
+        border-radius: 5px;
         padding-inline: 8px;
+        padding-block: 2px;
         display: inline-block;
+        background-color: #e5e7eb;
+        color: #3d5265;
+        font-size: 0.6rem;
       }
     }
   }
