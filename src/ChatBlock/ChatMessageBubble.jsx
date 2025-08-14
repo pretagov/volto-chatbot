@@ -391,21 +391,22 @@ export function ChatMessageBubble(props) {
               <ToolCall key={index} {...info} />
             ))}
 
-          {showSources && blockData.displayMode === "sidebar" && (
-            <>
-              <Button
-                onClick={() => {
-                  sourcesForSelectedMessage.set(sources);
-                }}
-                className="floated show-sources-button"
-              >
-                <span aria-hidden="true">
-                  <SVGIcon name={LinkIcon} />
-                </span>
-                {`Sources ${sources.length}`}
-              </Button>
-            </>
-          )}
+          {Object.keys(documents).length > 0 &&
+            blockData.displayMode === 'sidebar' && (
+              <>
+                <Button
+                  onClick={() => {
+                    sourcesForSelectedMessage.set(documents);
+                  }}
+                  className="floated show-sources-button"
+                >
+                  <span aria-hidden="true">
+                    <SVGIcon name={LinkIcon} />
+                  </span>
+                  {`Sources ${Object.keys(documents).length}`}
+                </Button>
+              </>
+            )}
 
           <Markdown
             components={components(message, markers, stableContextSources)}

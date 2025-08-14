@@ -58,16 +58,18 @@ const SideContent = injectLazyLibs(["luxon"])(function SideContent({
           {sources.map((source, index) => {
             return (
               <li key={index} className="">
-                <a href={source.link}>
-                  <h3>{source.semantic_identifier}</h3>
-                </a>
+                <div className="all-sources-display__header">
+                  <div className="all-sources-display__number">{index + 1}</div>
+                  <a href={source.link}>
+                    <h3>{source.semantic_identifier}</h3>
+                  </a>
+                </div>
                 <time dateTime={source.updated_at}>
                   {luxon.DateTime.fromISO(source.updated_at)?.toRelative()}
                 </time>
-                <Markdown
-                >
-                  {source.blurb}
-                </Markdown>
+                <div className="all-sources-display__description">
+                  <Markdown>{source.blurb}</Markdown>
+                </div>
                 {/* <p dangerouslySetInnerHTML={{ __html: source.blurb }}></p> */}
               </li>
             );
