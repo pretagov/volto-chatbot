@@ -11,6 +11,8 @@ import { useBackendChat } from './useBackendChat';
 import { SVGIcon } from './utils';
 import PenIcon from './../icons/square-pen.svg';
 
+import { sourcesForSelectedMessage } from "#stores/sidebarStore";
+
 import './style.less';
 
 function ChatWindow({
@@ -180,7 +182,10 @@ function ChatWindow({
               isStreaming={isStreaming}
               enableMatomoTracking={enableMatomoTracking}
               persona={persona}
-              onSubmit={onSubmit}
+               onSubmit={(submitHandlerInput) => {
+                sourcesForSelectedMessage.set([]);
+                onSubmit(submitHandlerInput);
+              }}
             />
           </div>
         </Form>
