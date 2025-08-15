@@ -25,7 +25,7 @@ const ChatBlockDisplay = withDanswerData(({ assistant }) => [
   "assistantData",
   typeof assistant !== "undefined" && assistant !== null
     ? superagent.get(`/_da/persona/${assistant}`).type("json")
-    : null,
+    : () => { },
   assistant,
 ])(function ChatBlockDisplay({ data, assistantData }) {
   if (!assistantData) {
@@ -123,6 +123,7 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
                   aria-label={"Close"}
                   onClick={() => {
                     selectedSidebarChatbot.set(null);
+                    sourcesForSelectedMessage.set([]);
                   }}
                 >
                   <Icon circled name={clearSVG} size="48px" />
