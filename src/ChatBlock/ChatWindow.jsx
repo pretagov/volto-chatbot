@@ -70,6 +70,13 @@ function ChatWindow({
     }
   }, [isStreaming, scrollToInput, isEditMode]);
 
+  const previousPersonaId = usePrevious(persona.id);
+  React.useEffect(() => {
+    if (previousPersonaId && persona.id !== previousPersonaId) {
+      handleClearChat();
+    }
+  }, [persona.id]);
+
   const handleClearChat = () => {
     clearChat();
     setShowLandingPage(true);

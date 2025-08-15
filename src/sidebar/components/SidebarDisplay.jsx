@@ -25,7 +25,7 @@ const ChatBlockDisplay = withDanswerData(({ assistant }) => [
   "assistantData",
   typeof assistant !== "undefined" && assistant !== null
     ? superagent.get(`/_da/persona/${assistant}`).type("json")
-    : null,
+    : () => { },
   assistant,
 ])(function ChatBlockDisplay({ data, assistantData }) {
   if (!assistantData) {
