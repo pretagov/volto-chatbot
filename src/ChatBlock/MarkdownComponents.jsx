@@ -316,6 +316,11 @@ export function components(message, markers, citedSources) {
       const { node, ...rest } = props;
       const value = node.children?.[0]?.children?.[0]?.value || ''; // we assume a <a><span/></a>
 
+      // Handle actual markdown links. Starting with `[` is for citations which have a format of `[[1]](URL)`
+      if (!value?.toString().startsWith('[') && rest.href) {
+        return <a href={rest.href}>{value.toString()}</a>;
+      }
+
       if (value?.toString().startsWith('*')) {
         return <div className="" />;
       } else {
