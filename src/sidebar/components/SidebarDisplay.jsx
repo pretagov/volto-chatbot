@@ -123,6 +123,7 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
                   aria-label={"Close"}
                   onClick={() => {
                     selectedSidebarChatbot.set(null);
+                    sourcesForSelectedMessage.set([]);
                   }}
                 >
                   <Icon circled name={clearSVG} size="48px" />
