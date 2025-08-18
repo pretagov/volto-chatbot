@@ -12,6 +12,7 @@ import { SVGIcon } from './utils';
 import PenIcon from './../icons/square-pen.svg';
 
 import { sourcesForSelectedMessage } from "#stores/sidebarStore";
+import { usePrevious } from "@plone/volto/helpers";
 
 import './style.less';
 
