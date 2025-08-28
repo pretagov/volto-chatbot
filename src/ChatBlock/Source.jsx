@@ -6,6 +6,9 @@ import GlobeIcon from './../icons/globe.svg';
 
 import { injectLazyLibs } from '@plone/volto/helpers/Loadable/Loadable';
 
+import loadable from "@loadable/component";
+const Markdown = loadable(() => import("react-markdown"));
+
 function Icon({ source_type }) {
   if (source_type === 'web') {
     return <SVGIcon name={GlobeIcon} size="15" alt="Web icon" />;
@@ -67,7 +70,50 @@ const SourceDetails_ = ({ source, index, luxon }) => {
           )}
           {blurb && (
             <div className="source-desc">
-              <span>{blurb}</span>
+              <Markdown
+                components={{
+                  p: (props) => {
+                    const { node, ...rest } = props;
+                    const value = node.children?.[0]?.value || ""; 
+                    return value;
+                  },
+                  a: (props) => {
+                    const { node, ...rest } = props;
+                    const value = node.children?.[0]?.value || ""; 
+                    return value;
+                  },
+                  h1: (props) => {
+                    const { node, ...rest } = props;
+                    const value = node.children?.[0]?.value || ""; 
+                    return `${value}. `;
+                  },
+                  h2: (props) => {
+                    const { node, ...rest } = props;
+                    const value = node.children?.[0]?.value || ""; 
+                    return `${value}. `;
+                  },
+                  h3: (props) => {
+                    const { node, ...rest } = props;
+                    const value = node.children?.[0]?.value || ""; 
+                    return `${value}. `;
+                  },
+                  ul: (props) => {
+                    const {node, ...rest} = props;
+                    const liNodes = node.children.filter((child) => child.tagName === 'li')
+                    // Assumed the list element is either text or an element with text.
+                    const listValues = liNodes.map((node) => {
+                      const childNode = node.children?.[0]
+                      if (childNode.value) {
+                        return childNode.value
+                      }
+                      return childNode.children[0].value
+                    })
+                    return listValues.join(". ");
+                  },
+                }}
+              >
+                {blurb}
+              </Markdown>
             </div>
           )}
         </>
