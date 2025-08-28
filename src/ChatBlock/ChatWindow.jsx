@@ -21,7 +21,7 @@ import config from "@plone/registry";
 export const IsSidebarContext = React.createContext(false);
 
 function useIsAwake() {
-  const [isAwake, setIsAwake] = React.useState(false);
+  const [isAwake, setIsAwake] = React.useState(null);
   const [error, setError] = React.useState(false);
 
   React.useEffect(() => {
@@ -98,7 +98,9 @@ function ChatWindow({
   });
   const [showLandingPage, setShowLandingPage] = React.useState(false);
   const { isAwake, wake, setIsAwake, error: wakeError } = useIsAwake();
-  const [canSubmit, setCanSubmit] = React.useState(isAwake && !isStreaming);
+  const [canSubmit, setCanSubmit] = React.useState(null);
+
+  const isSidebar = React.useContext(IsSidebarContext);
 
   // Update whether we can ask a question based on health check and streaming state
   React.useEffect(() => {
@@ -118,6 +120,9 @@ function ChatWindow({
       wake();
       setCanSubmit(false);
       return;
+    }
+    if (canSubmit === null) {
+      setCanSubmit(isAwake);
     }
 
     if (isAwake) {
@@ -247,13 +252,13 @@ function ChatWindow({
             </div>
           </>
         )}
-        {isStreaming && !isFetchingRelatedQuestions && (
+        {canSubmit === false && !isFetchingRelatedQuestions && (
           <div className="loader" />
         )}
       </div>
 
       <div className="chat-form">
-        {!canSubmit ? <div className="loader" /> : null}
+        {/* {![null, true].includes(canSubmit) && !isStreaming ? <div className="loader" /> : null} */}
         <Form>
           {wakeError ? (
             <p
@@ -265,7 +270,6 @@ function ChatWindow({
             </p>
           ) : null}
           <div className="textarea-wrapper">
-            
             <AutoResizeTextarea
               maxRows={8}
               minRows={1}
@@ -281,6 +285,10 @@ function ChatWindow({
                 onSubmit(submitHandlerInput);
               }}
               onFocus={() => {
+                // Handle first touch starting the "awake" process
+                if (isAwake === null) {
+                  setIsAwake(false);
+                }
                 if (isAwake) {
                   return;
                 }
