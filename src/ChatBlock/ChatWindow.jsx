@@ -52,7 +52,8 @@ function ChatWindow({
     isFetchingRelatedQuestions,
     clearChat,
   } = useBackendChat({
-    persona,
+    chatId: data.assistant,
+    // persona,
     qgenAsistantId,
     enableQgen,
   });
@@ -71,12 +72,13 @@ function ChatWindow({
     }
   }, [isStreaming, scrollToInput, isEditMode]);
 
-  const previousPersonaId = usePrevious(persona.id);
+  const currentPersonaId = persona?.id
+  const previousPersonaId = usePrevious(currentPersonaId);
   React.useEffect(() => {
-    if (previousPersonaId && persona.id !== previousPersonaId) {
+    if (previousPersonaId && currentPersonaId !== previousPersonaId) {
       handleClearChat();
     }
-  }, [persona.id]);
+  }, [currentPersonaId]);
 
   const handleClearChat = () => {
     clearChat();
