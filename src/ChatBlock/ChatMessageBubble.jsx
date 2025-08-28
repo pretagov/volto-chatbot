@@ -403,7 +403,7 @@ export function ChatMessageBubble(props) {
                   <span aria-hidden="true">
                     <SVGIcon name={LinkIcon} />
                   </span>
-                  {`Sources ${Object.keys(documents).length}`}
+                  {`${Object.keys(documents).length} results`}
                 </Button>
               </>
             )}
