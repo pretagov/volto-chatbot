@@ -249,6 +249,7 @@ function ChatWindow({
       </div>
 
       <div className="chat-form">
+        {!canSubmit ? <div className="loader" /> : null}
         <Form>
           {wakeError ? (
             <p
@@ -260,6 +261,7 @@ function ChatWindow({
             </p>
           ) : null}
           <div className="textarea-wrapper">
+            
             <AutoResizeTextarea
               maxRows={8}
               minRows={1}
