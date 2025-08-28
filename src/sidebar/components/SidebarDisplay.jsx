@@ -25,7 +25,7 @@ const ChatBlockDisplay = withDanswerData(({ assistant }) => [
   "assistantData",
   typeof assistant !== "undefined" && assistant !== null
     ? superagent.get(`/_da/persona/${assistant}`).type("json")
-    : () => { },
+    : () => {},
   assistant,
 ])(function ChatBlockDisplay({ data, assistantData }) {
   if (!assistantData) {
@@ -68,7 +68,52 @@ const SideContent = injectLazyLibs(["luxon"])(function SideContent({
                   {luxon.DateTime.fromISO(source.updated_at)?.toRelative()}
                 </time>
                 <div className="all-sources-display__description">
-                  <Markdown>{source.blurb}</Markdown>
+                  <Markdown
+                    components={{
+                      p: (props) => {
+                        const { node, ...rest } = props;
+                        const value = node.children?.[0]?.value || "";
+                        return value;
+                      },
+                      a: (props) => {
+                        const { node, ...rest } = props;
+                        const value = node.children?.[0]?.value || "";
+                        return value;
+                      },
+                      h1: (props) => {
+                        const { node, ...rest } = props;
+                        const value = node.children?.[0]?.value || "";
+                        return `${value}. `;
+                      },
+                      h2: (props) => {
+                        const { node, ...rest } = props;
+                        const value = node.children?.[0]?.value || "";
+                        return `${value}. `;
+                      },
+                      h3: (props) => {
+                        const { node, ...rest } = props;
+                        const value = node.children?.[0]?.value || "";
+                        return `${value}. `;
+                      },
+                      ul: (props) => {
+                        const { node, ...rest } = props;
+                        const liNodes = node.children.filter(
+                          (child) => child.tagName === "li",
+                        );
+                        // Assumed the list element is either text or an element with text.
+                        const listValues = liNodes.map((node) => {
+                          const childNode = node.children?.[0];
+                          if (childNode.value) {
+                            return childNode.value;
+                          }
+                          return childNode.children[0].value;
+                        });
+                        return listValues.join(". ");
+                      },
+                    }}
+                  >
+                    {source.blurb}
+                  </Markdown>
                 </div>
                 {/* <p dangerouslySetInnerHTML={{ __html: source.blurb }}></p> */}
               </li>
