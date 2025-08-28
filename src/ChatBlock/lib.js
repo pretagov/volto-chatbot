@@ -1,8 +1,61 @@
 import { useRef, useEffect } from 'react';
 
+import config from "@plone/registry";
+
 export const delay = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
+
+// GET Request to DANSWER_URL/api/health to wake it up before starting.
+//   Will retry 3 times over 90 seconds and throw if no response received or unhealthy status is returned.
+export async function wakeApi() {
+  let timeout = 15000;
+
+  function fetchWithRetry(url, retries, abortController) {
+    return fetch(url, {
+      signal: abortController,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    }).catch((error) => {
+      if ("connection" in navigator && navigator.connection.saveData === true) {
+        throw error;
+      }
+      if (retries > 0 && error.message !== "Request timed out") {
+        // Add 5 seconds to the timeout each retry
+        timeout += 5000;
+        return fetchWithRetry(url, retries - 1, AbortSignal.timeout(timeout));
+      } else {
+        throw error;
+      }
+    });
+  }
+  let healthResponse = undefined;
+  const healthCheckUrl = config.settings["volto-chatbot"].rewakeUrl;
+  try {
+    healthResponse = await fetchWithRetry(
+      healthCheckUrl,
+      3,
+      AbortSignal.timeout(timeout),
+    );
+  } catch (err) {
+    // Timeout reached
+    if (err.name === "TimeoutError") {
+      throw Error("Failed to start a chat session at this time. Please try again later");
+    }
+    // Fetch request cancelled
+    else if (err.name === "AbortError") {
+      throw Error(`Chat session startup cancelled. Reason: ${err.message}`)
+    } else {
+      throw Error(`Unknown Error: type: ${err.name}, message: ${err.message}`)
+    }
+  }
+  if (!healthResponse?.ok) {
+    return false;
+  }
+
+  return true;
+}
 
 export async function createChatSession(personaId, description) {
   const createChatSessionResponse = await fetch(

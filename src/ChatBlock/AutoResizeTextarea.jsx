@@ -7,12 +7,22 @@ import { SVGIcon } from './utils';
 import SendIcon from './../icons/send.svg';
 
 export default React.forwardRef(function AutoResizeTextarea(props, ref) {
-  const { onSubmit, isStreaming, enableMatomoTracking, persona, ...rest } =
-    props;
   const [input, setInput] = React.useState('');
+  const {
+    onSubmit,
+    onFocus,
+    onChange = () => {},
+    disableSubmit,
+    enableMatomoTracking,
+    persona,
+    ...rest
+  } = props;
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (disableSubmit) {
+      return
+    }
     const trimmedInput = input.trim();
     if (trimmedInput) {
       if (enableMatomoTracking) {
@@ -30,8 +40,13 @@ export default React.forwardRef(function AutoResizeTextarea(props, ref) {
   return (
     <>
       <TextareaAutosize
+        aria-describedby="chat-wake-error-message"
         value={input}
-        onChange={(e) => setInput(e.target.value)}
+        onFocus={onFocus}
+        onChange={(e) => {
+          onChange(e);
+          setInput(e.target.value);
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             handleSubmit(e);
@@ -46,7 +61,7 @@ export default React.forwardRef(function AutoResizeTextarea(props, ref) {
 
       <Button
         className="submit-btn"
-        disabled={isStreaming}
+        disabled={disableSubmit}
         type="submit"
         aria-label="Send"
         onKeyDown={(e) => {
