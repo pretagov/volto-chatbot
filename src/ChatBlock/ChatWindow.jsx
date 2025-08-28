@@ -18,6 +18,8 @@ import "./style.less";
 
 import config from "@plone/registry";
 
+export const IsSidebarContext = React.createContext(false);
+
 function useIsAwake() {
   const [isAwake, setIsAwake] = React.useState(false);
   const [error, setError] = React.useState(false);
@@ -338,4 +340,12 @@ function ChatWindow({
   );
 }
 
-export default injectLazyLibs(["rehypePrism", "remarkGfm"])(ChatWindow);
+function WrappedChatWindow(props) {
+  return (
+    <IsSidebarContext.Provider value={props.displayMode === "sidebar"}>
+      <ChatWindow {...props} />
+    </IsSidebarContext.Provider>
+  );
+}
+
+export default injectLazyLibs(["rehypePrism", "remarkGfm"])(WrappedChatWindow);

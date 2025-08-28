@@ -122,4 +122,118 @@ const FeedbackModal = ({
   );
 };
 
+export function InlineFeedback({
+  modalOpen,
+  onClose,
+  setToast,
+  onToast,
+  isPositive,
+  message,
+  setIsToastActive,
+  feedbackReasons,
+  enableMatomoTracking,
+  persona,
+}) {
+  const [feedbackText, setFeedbackText] = useState("");
+  const [selectedReason, setSelectedReason] = useState("");
+  const isPositiveFeedback = isPositive;
+
+  const resetForm = () => {
+    setFeedbackText("");
+    setSelectedReason("");
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const submitFeedback = async () => {
+    try {
+      await createChatMessageFeedback({
+        chat_message_id: message.messageId,
+        feedback_text: feedbackText,
+        is_positive: isPositive,
+        predefined_feedback: selectedReason,
+      });
+      if (enableMatomoTracking) {
+        trackEvent({
+          category: persona?.name ? `Chatbot - ${persona.name}` : "Chatbot",
+          action: isPositive
+            ? "Chatbot: Positive feedback submitted"
+            : "Chatbot: Negative feedback submitted",
+          name: "Feedback submitted",
+        });
+      }
+      setIsToastActive(true);
+      onToast("Thanks for your feedback!", "success");
+    } catch (error) {
+      setIsToastActive(true);
+      onToast("Failed to submit feedback.", "error");
+    } finally {
+      setTimeout(() => setIsToastActive(false), 5000);
+      setTimeout(() => setToast(null), 3500);
+      resetForm();
+      onClose();
+    }
+  };
+
+  if (!modalOpen) {
+    return null
+  }
+
+  return (
+    <div
+      style={{ marginBlock: "8px" }}
+    >
+        <h3>
+          {isPositiveFeedback ? (
+            <>
+              Share your positive feedback
+            </>
+          ) : (
+            <>
+              Tell us how we can improve
+            </>
+          )}
+        </h3>
+
+        {!isPositiveFeedback && (
+          <div className="reason-buttons">
+            {feedbackReasons?.map((reason) => (
+              <Button
+                primary
+                size="small"
+                key={reason}
+                onClick={() => setSelectedReason(reason)}
+                inverted={selectedReason !== reason}
+              >
+                {reason}
+              </Button>
+            ))}
+          </div>
+        )}
+
+        <Form>
+          <TextArea
+            placeholder={
+              isPositiveFeedback
+                ? "What did you like about this response? (Optional)"
+                : "What could be improved? (Optional)"
+            }
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+          />
+        </Form>
+
+      <div>
+        <Button onClick={handleClose}>Cancel</Button>
+        <Button primary onClick={submitFeedback}>
+          Submit Feedback
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default FeedbackModal;
