@@ -1,26 +1,27 @@
-import React from 'react';
-import { injectLazyLibs } from '@plone/volto/helpers/Loadable';
-import { Button, Form, Segment, Checkbox, Popup } from 'semantic-ui-react';
-import { trackEvent } from '@eeacms/volto-matomo/utils';
+import { trackEvent } from "@eeacms/volto-matomo/utils";
+import { injectLazyLibs } from "@plone/volto/helpers/Loadable";
+import React from "react";
+import { Button, Checkbox, Form, Popup, Segment } from "semantic-ui-react";
 
-import AutoResizeTextarea from './AutoResizeTextarea';
-import { ChatMessageBubble } from './ChatMessageBubble';
-import EmptyState from './EmptyState';
+import PenIcon from "./../icons/square-pen.svg";
+import AutoResizeTextarea from "./AutoResizeTextarea";
+import { ChatMessageBubble } from "./ChatMessageBubble";
+import EmptyState from "./EmptyState";
 import { useScrollonStream, wakeApi } from "./lib";
-import { useBackendChat } from './useBackendChat';
-import { SVGIcon } from './utils';
-import PenIcon from './../icons/square-pen.svg';
+import { useBackendChat } from "./useBackendChat";
+import { SVGIcon } from "./utils";
 
 import { sourcesForSelectedMessage } from "#stores/sidebarStore";
 import { usePrevious } from "@plone/volto/helpers";
 
-import './style.less';
-
+import "./style.less";
 
 import config from "@plone/registry";
 
+export const IsSidebarContext = React.createContext(false);
+
 function useIsAwake() {
-  const [isAwake, setIsAwake] = React.useState(false);
+  const [isAwake, setIsAwake] = React.useState(null);
   const [error, setError] = React.useState(false);
 
   React.useEffect(() => {
@@ -40,15 +41,17 @@ function useIsAwake() {
       const wakeResult = await wakeApi();
       setIsAwake(wakeResult);
       localStorage.setItem("chat-last-awake", Date.now());
-    }
-    catch (err) {
+    } catch (err) {
       setIsAwake(false);
       setError(err.message);
     }
   }
 
   return {
-    isAwake, wake, setIsAwake, error: error
+    isAwake,
+    wake,
+    setIsAwake,
+    error: error,
   };
 }
 
@@ -56,7 +59,7 @@ function ChatWindow({
   persona,
   rehypePrism,
   remarkGfm,
-  placeholderPrompt = 'Ask a question',
+  placeholderPrompt = "Ask a question",
   isEditMode,
   ...data
 }) {
@@ -68,15 +71,15 @@ function ChatWindow({
     scrollToInput,
     showToolCalls,
     feedbackReasons,
-    qualityCheck = 'disabled',
+    qualityCheck = "disabled",
     qualityCheckStages = [],
-    qualityCheckContext = 'citations',
+    qualityCheckContext = "citations",
     noSupportDocumentsMessage,
     totalFailMessage,
     enableShowTotalFailMessage,
     showAssistantTitle,
     showAssistantDescription,
-    starterPromptsPosition = 'top',
+    starterPromptsPosition = "top",
     enableMatomoTracking,
   } = data;
   const [qualityCheckEnabled, setQualityCheckEnabled] = React.useState(true);
@@ -88,13 +91,16 @@ function ChatWindow({
     isFetchingRelatedQuestions,
     clearChat,
   } = useBackendChat({
-    persona,
+    chatId: data.assistant,
+    // persona,
     qgenAsistantId,
     enableQgen,
   });
   const [showLandingPage, setShowLandingPage] = React.useState(false);
   const { isAwake, wake, setIsAwake, error: wakeError } = useIsAwake();
-  const [canSubmit, setCanSubmit] = React.useState(isAwake && !isStreaming);
+  const [canSubmit, setCanSubmit] = React.useState(null);
+
+  const isSidebar = React.useContext(IsSidebarContext);
 
   // Update whether we can ask a question based on health check and streaming state
   React.useEffect(() => {
@@ -114,6 +120,9 @@ function ChatWindow({
       wake();
       setCanSubmit(false);
       return;
+    }
+    if (canSubmit === null) {
+      setCanSubmit(isAwake);
     }
 
     if (isAwake) {
@@ -135,12 +144,13 @@ function ChatWindow({
     }
   }, [isStreaming, scrollToInput, isEditMode]);
 
-  const previousPersonaId = usePrevious(persona.id);
+  const currentPersonaId = persona?.id;
+  const previousPersonaId = usePrevious(currentPersonaId);
   React.useEffect(() => {
-    if (previousPersonaId && persona.id !== previousPersonaId) {
+    if (previousPersonaId && currentPersonaId !== previousPersonaId) {
       handleClearChat();
     }
-  }, [persona.id]);
+  }, [currentPersonaId]);
 
   const handleClearChat = () => {
     clearChat();
@@ -163,9 +173,9 @@ function ChatWindow({
   const handleStarterPromptChoice = (message) => {
     if (enableMatomoTracking) {
       trackEvent({
-        category: persona?.name ? `Chatbot - ${persona.name}` : 'Chatbot',
-        action: 'Chatbot: Starter prompt click',
-        name: 'Message submitted',
+        category: persona?.name ? `Chatbot - ${persona.name}` : "Chatbot",
+        action: "Chatbot: Starter prompt click",
+        name: "Message submitted",
       });
     }
     onSubmit({ message });
@@ -177,15 +187,21 @@ function ChatWindow({
       <div className="messages">
         {showLandingPage ? (
           <>
-            {showAssistantTitle && <h2>{persona.name}</h2>}
-            {showAssistantDescription && <p>{persona.description}</p>}
+            {persona && showAssistantTitle && <h2>{persona.name}</h2>}
+            {persona && showAssistantDescription && (
+              <p>{persona.description}</p>
+            )}
 
-            {starterPromptsPosition === 'top' && (
+            {starterPromptsPosition === "top" && (
               <EmptyState
                 {...data}
                 persona={persona}
                 onChoice={handleStarterPromptChoice}
-                starterPromptsHeading={data.displayMode === 'sidebar' ? null : data.starterPromptsHeading}
+                starterPromptsHeading={
+                  data.displayMode === "sidebar"
+                    ? null
+                    : data.starterPromptsHeading
+                }
               />
             )}
           </>
@@ -203,7 +219,7 @@ function ChatWindow({
             </Segment>
             <div
               ref={conversationRef}
-              className={`conversation ${height ? 'include-scrollbar' : ''}`}
+              className={`conversation ${height ? "include-scrollbar" : ""}`}
               style={{ maxHeight: height }}
             >
               {messages?.map((m, index) => (
@@ -236,12 +252,13 @@ function ChatWindow({
             </div>
           </>
         )}
-        {isStreaming && !isFetchingRelatedQuestions && (
+        {canSubmit === false && !isFetchingRelatedQuestions && (
           <div className="loader" />
         )}
       </div>
 
       <div className="chat-form">
+        {/* {![null, true].includes(canSubmit) && !isStreaming ? <div className="loader" /> : null} */}
         <Form>
           {wakeError ? (
             <p
@@ -268,6 +285,10 @@ function ChatWindow({
                 onSubmit(submitHandlerInput);
               }}
               onFocus={() => {
+                // Handle first touch starting the "awake" process
+                if (isAwake === null) {
+                  setIsAwake(false);
+                }
                 if (isAwake) {
                   return;
                 }
@@ -292,7 +313,7 @@ function ChatWindow({
           </div>
         </Form>
 
-        {qualityCheck === 'ondemand_toggle' && (
+        {qualityCheck === "ondemand_toggle" && (
           <div className="quality-check-toggle">
             <Popup
               wide
@@ -304,8 +325,8 @@ function ChatWindow({
                   id="fact-check-toggle"
                   toggle
                   label={{
-                    children: 'Fact-check AI answer',
-                    htmlFor: 'fact-check-toggle',
+                    children: "Fact-check AI answer",
+                    htmlFor: "fact-check-toggle",
                   }}
                   checked={qualityCheckEnabled}
                   onChange={() => setQualityCheckEnabled((v) => !v)}
@@ -316,7 +337,7 @@ function ChatWindow({
         )}
       </div>
 
-      {showLandingPage && starterPromptsPosition === 'bottom' && (
+      {showLandingPage && starterPromptsPosition === "bottom" && (
         <EmptyState
           {...data}
           persona={persona}
@@ -327,4 +348,12 @@ function ChatWindow({
   );
 }
 
-export default injectLazyLibs(['rehypePrism', 'remarkGfm'])(ChatWindow);
+function WrappedChatWindow(props) {
+  return (
+    <IsSidebarContext.Provider value={props.displayMode === "sidebar"}>
+      <ChatWindow {...props} />
+    </IsSidebarContext.Provider>
+  );
+}
+
+export default injectLazyLibs(["rehypePrism", "remarkGfm"])(WrappedChatWindow);

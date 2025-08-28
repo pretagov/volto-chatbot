@@ -3,7 +3,7 @@ import config from '@plone/registry';
 import { DefaultChatbotStartButton } from './DefaultChatbotStartButton';
 
 export function SidebarChatbotStartButton({
-  assistant,
+  block,
   title = 'Start assistant chat',
 }) {
   const ChatbotStartButton =
@@ -15,7 +15,7 @@ export function SidebarChatbotStartButton({
     <div className="block danswerChat">
       <ChatbotStartButton
         onClick={() => {
-          selectedSidebarChatbot.set(assistant);
+          selectedSidebarChatbot.set(block);
         }}
         title={title || 'Start assistant chat'}
       />

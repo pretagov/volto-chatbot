@@ -92,11 +92,12 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
   const isSidebarVisible = $sourcesForSelectedMessage?.length > 0;
 
   const blocksFieldname = getBlocksFieldname(content) || "blocks";
-  const sidebarBlockData = Object.values(content?.[blocksFieldname] || {}).find(
-    (block) =>
-      block["@type"] === "danswerChat" &&
-      block.assistant == $selectedSidebarChatbot,
-  );
+  const sidebarBlockData =
+    content?.[blocksFieldname]?.[
+      Object.keys(content?.[blocksFieldname] || {}).find(
+        (blockId) => blockId === $selectedSidebarChatbot,
+      )
+    ];
 
   const sidebarTitle =
     sidebarBlockData?.starterPromptsHeading ||
@@ -132,7 +133,7 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
               <h2 id="dialog_heading">{sidebarTitle}</h2>
             </div>
             <ChatBlockDisplay
-              assistant={$selectedSidebarChatbot}
+              assistant={sidebarBlockData?.assistant}
               data={sidebarBlockData}
             />
           </div>

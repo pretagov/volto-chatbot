@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Button, Icon } from 'semantic-ui-react';
-import FeedbackModal from './FeedbackModal';
 import { SVGIcon } from './utils';
 import ThumbsUpIcon from './../icons/thumbs-up.svg';
 import ThumbsDownIcon from './../icons/thumbs-down.svg';
+import { IsSidebarContext } from "@eeacms/volto-chatbot/ChatBlock/ChatWindow";
+import FeedbackModal, { InlineFeedback } from "./FeedbackModal";
 
 const Toast = ({ message, type, isActive }) => (
   <div className={`feedback-toast ${type} ${isActive ? 'active' : ''}`}>
@@ -19,6 +20,8 @@ const ChatMessageFeedback = (props) => {
   const [isPositive, setIsPositive] = useState(null);
   const [isToastActive, setIsToastActive] = useState(false);
 
+  const isSidebar = React.useContext(IsSidebarContext);
+
   const handleFeedback = (boolean) => {
     setIsPositive(boolean);
     setModalOpen(true);
@@ -30,6 +33,8 @@ const ChatMessageFeedback = (props) => {
       type: type,
     });
   };
+
+  const FeedbackForm = isSidebar ? InlineFeedback : FeedbackModal
 
   return (
     <>
@@ -58,7 +63,7 @@ const ChatMessageFeedback = (props) => {
         />
       )}
 
-      <FeedbackModal
+      <FeedbackForm
         modalOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         setToast={setToast}
