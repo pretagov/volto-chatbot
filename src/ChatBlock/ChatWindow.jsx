@@ -180,8 +180,10 @@ function ChatWindow({
       <div className="messages">
         {showLandingPage ? (
           <>
-            {showAssistantTitle && <h2>{persona.name}</h2>}
-            {showAssistantDescription && <p>{persona.description}</p>}
+            {persona && showAssistantTitle && <h2>{persona.name}</h2>}
+            {persona && showAssistantDescription && (
+              <p>{persona.description}</p>
+            )}
 
             {starterPromptsPosition === "top" && (
               <EmptyState

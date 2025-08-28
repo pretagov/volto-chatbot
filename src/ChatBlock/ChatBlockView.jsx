@@ -46,7 +46,7 @@ export default function ChatBlockView(props) {
     }
     return (
       <SidebarChatbotStartButton
-        assistant={data.assistant}
+        block={props.block}
         title={data.sidebarStartButtonText}
       />
     );
