@@ -198,6 +198,11 @@ export function buildLatestMessageChain(messageMap) {
   return finalMessageList; // .concat(additionalMessagesOnMainline);
 }
 
+/**
+ * 
+ * @param {Object} options
+ * @param {AbortSignal} signal
+ */
 export async function* sendMessage({
   message,
   fileDescriptors,
@@ -214,6 +219,7 @@ export async function* sendMessage({
   systemPromptOverride,
   useExistingUserMessage,
   alternateAssistantId,
+  signal,
 }) {
   const documentsAreSelected =
     selectedDocumentIds && selectedDocumentIds.length > 0;
@@ -223,6 +229,7 @@ export async function* sendMessage({
     headers: {
       'Content-Type': 'application/json',
     },
+    signal,
     body: JSON.stringify({
       alternate_assistant_id: alternateAssistantId,
       chat_session_id: chatSessionId,
@@ -363,7 +370,7 @@ export class CurrentMessageFIFO {
   }
 }
 
-export async function fetchRelatedQuestions(message, qgenAsistantId) {
+export async function fetchRelatedQuestions(message, { qgenAsistantId, signal }) {
   const { query, answer } = message;
   const chatSessionId = await createChatSession(qgenAsistantId, `Q: ${query}`);
 
@@ -376,6 +383,7 @@ export async function fetchRelatedQuestions(message, qgenAsistantId) {
     promptId: null,
     filters: {},
     selectedDocumentIds: [],
+    signal: signal,
   };
   const promise = updateCurrentMessageFIFO(params, {}, () => {});
 
@@ -411,22 +419,18 @@ export async function fetchRelatedQuestions(message, qgenAsistantId) {
   return result;
 }
 
-export async function* updateCurrentMessageFIFO(
-  params,
-  isCancelledRef,
-  setIsCancelled,
-) {
+/**
+ * 
+ * @param {Object} params 
+ * @param {AbortSignal} params.signal 
+ */
+export async function* updateCurrentMessageFIFO(params) {
   const promise = sendMessage(params);
 
   try {
     for await (const packetBunch of promise) {
       for (const packet of packetBunch) {
         yield { packet };
-      }
-
-      if (isCancelledRef.current) {
-        setIsCancelled(false);
-        break;
       }
     }
   } catch (error) {

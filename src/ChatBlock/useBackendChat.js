@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   buildLatestMessageChain,
   createChatSession,
@@ -9,7 +9,10 @@ import {
   removeMessage,
   updateCurrentMessageFIFO,
   updateParentChildren,
+  wakeApi,
 } from './lib';
+
+import config from "@plone/registry";
 
 const TEMP_USER_MESSAGE_ID = -1;
 const TEMP_ASSISTANT_MESSAGE_ID = -2;
@@ -26,6 +29,14 @@ export const ChatFileType = {
   DOCUMENT: 'document',
   PLAIN_TEXT: 'plain_text',
 };
+
+export const ChatState = Object.freeze({
+  ASLEEP: 'asleep',
+  READY: 'ready',
+  STREAMING: 'awake',
+  FETCHING_RELATED: 'fetchingRelated',
+  ERRORED: 'error',
+});
 
 function upsertToCompleteMessageMap({
   chatSessionId,
@@ -96,12 +107,15 @@ function upsertToCompleteMessageMap({
 }
 
 class SubmitHandler {
+  /**
+   * @param {Object} options
+   * @param {AbortSignal=} options.signal  Optional parameter for additional control of the abort signal. E.g. stopping the fetch from a button press.
+   */
   constructor({
     chatId,
-    setIsStreaming,
-    isCancelledRef,
-    setIsCancelled,
-    messageHistory,
+    persona,
+    setChatState,
+    onMessageHistoryChange,
     completeMessageDetail,
     currChatSessionId,
     setCurrChatSessionId,
@@ -109,23 +123,29 @@ class SubmitHandler {
     chatTitle,
     qgenAsistantId,
     enableQgen,
-    setIsFetchingRelatedQuestions,
+    signal,
   }) {
     this.chatId = chatId;
     this.chatTitle = chatTitle;
-    this.setIsStreaming = setIsStreaming;
-    this.isCancelledRef = isCancelledRef;
-    this.setIsCancelled = setIsCancelled;
-    this.messageHistory = messageHistory;
+    this.setChatState = setChatState;
+    this.onMessageHistoryChange = onMessageHistoryChange;
     this.completeMessageDetail = completeMessageDetail;
     this.currChatSessionId = currChatSessionId;
     this.setCurrChatSessionId = setCurrChatSessionId;
     this.setCompleteMessageDetail = setCompleteMessageDetail;
     this.qgenAsistantId = qgenAsistantId;
     this.enableQgen = enableQgen;
-    this.setIsFetchingRelatedQuestions = setIsFetchingRelatedQuestions;
 
     this.onSubmit = this.onSubmit.bind(this);
+    this.abortSignal = signal || null;
+  }
+
+  set messageHistory(history) {
+    this._messageHistory = history;
+    this.onMessageHistoryChange(history);
+  }
+  get messageHistory() {
+    return this._messageHistory || [];
   }
 
   async onSubmit({
@@ -225,7 +245,7 @@ class SubmitHandler {
     // const currentAssistantId = this.persona.id;
     const currentAssistantId = this.chatId;
 
-    this.setIsStreaming(true);
+    this.setChatState(ChatState.STREAMING);
 
     let answer = '';
     let query = null;
@@ -253,18 +273,16 @@ class SubmitHandler {
       queryOverride,
       forceSearch,
       useExistingUserMessage: isSeededChat,
+      signal: this.abortSignal,
     };
-    const promise = updateCurrentMessageFIFO(
-      params,
-      this.isCancelledRef,
-      this.setIsCancelled,
-    );
+    const promise = updateCurrentMessageFIFO(params);
 
     await delay(50);
 
     for await (const bit of promise) {
       if (bit.error) {
         stack.error = bit.error;
+        throw bit.error
       } else if (bit.isComplete) {
         stack.isComplete = true;
       } else {
@@ -373,11 +391,9 @@ class SubmitHandler {
             setCompleteMessageDetail: this.setCompleteMessageDetail,
           };
           newCompleteMessageDetail = upsertToCompleteMessageMap(info);
-        }
-
-        if (this.isCancelledRef.current) {
-          this.setIsCancelled(false);
-          break;
+          this.messageHistory = buildLatestMessageChain(
+            newCompleteMessageDetail.messageMap,
+          );
         }
       }
     }
@@ -396,10 +412,10 @@ class SubmitHandler {
       if (lastMessage && userMessage) {
         const query = userMessage.message;
         const answer = lastMessage.message;
-        this.setIsFetchingRelatedQuestions(true);
+        this.setChatState(ChatState.FETCHING_RELATED);
         const relatedQuestionsText = await fetchRelatedQuestions(
           { query, answer },
-          this.qgenAsistantId,
+          { qgenAsistantId: this.qgenAsistantId }
         );
 
         lastMessage.relatedQuestions = extractJSON(relatedQuestionsText);
@@ -408,10 +424,15 @@ class SubmitHandler {
           ...newCompleteMessageDetail,
           messageMap,
         });
-        this.setIsFetchingRelatedQuestions(false);
       }
     }
-    this.setIsStreaming(false);
+
+    // Update internal state ready for follow up messages.
+    this.messageHistory = buildLatestMessageChain(
+      newCompleteMessageDetail.messageMap,
+    );
+    this.completeMessageDetail = newCompleteMessageDetail;
+    this.setChatState(ChatState.READY);
   }
 }
 
@@ -428,40 +449,79 @@ function extractJSON(str) {
   }
 }
 
-export function useBackendChat({ chatId, qgenAsistantId, enableQgen }) {
-  const [isStreaming, setIsStreaming] = React.useState(false);
-  const [isFetchingRelatedQuestions, setIsFetchingRelatedQuestions] =
-    React.useState(false);
-  const [isCancelled, setIsCancelled] = React.useState(false);
-  const isCancelledRef = React.useRef(isCancelled); // scroll is cancelled
+export function useBackendChat({
+  persona,
+  qgenAsistantId,
+  enableQgen,
+  signal,
+}) {
+  const [error, setError] = React.useState('');
   const [currChatSessionId, setCurrChatSessionId] = React.useState(null);
+  const [chatState, setChatState] = React.useState(ChatState.ASLEEP);
+  const [messageHistory, setMessageHistory] = React.useState([]);
 
+  const rewakeDelayInMs =
+    config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
+
+  /** Try to wake up the API. Will early return if already awake */
+  async function wake() {
+    const readyForWaking =
+      Date.now() - rewakeDelayInMs < localStorage.getItem("chat-last-awake");
+
+    if (chatState !== ChatState.ASLEEP) {
+      if (readyForWaking) {
+        localStorage.setItem("chat-last-awake", Date.now());
+      }
+      return;
+    }
+
+    try {
+      const wakeResult = await wakeApi();
+      if (!!wakeResult) {
+        setChatState(ChatState.READY);
+        localStorage.setItem("chat-last-awake", Date.now());
+      }
+    } catch (err) {
+      setChatState(ChatState.ERRORED);
+      setError(err.message);
+    }
+  }
   React.useEffect(() => {
-    isCancelledRef.current = isCancelled;
-  }, [isCancelled]);
+    if (chatState === ChatState.ASLEEP) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      if (chatState === ChatState.READY) {
+        setChatState(ChatState.ASLEEP);
+      }
+    }, rewakeDelayInMs);
+    return () => clearTimeout(timeout);
+  }, [chatState]);
 
-  const [completeMessageDetail, setCompleteMessageDetail] = useState({
+  const [completeMessageDetail, setCompleteMessageDetail] = React.useState({
     sessionId: null,
     messageMap: new Map(),
   });
 
-  const messageHistory = buildLatestMessageChain(
-    completeMessageDetail.messageMap,
-  );
-  const submitHandler = new SubmitHandler({
-    completeMessageDetail,
-    currChatSessionId,
-    isCancelledRef,
-    messageHistory,
-    chatId,
-    setCompleteMessageDetail,
-    setCurrChatSessionId,
-    setIsCancelled,
-    setIsStreaming,
-    qgenAsistantId,
-    enableQgen,
-    setIsFetchingRelatedQuestions,
-  });
+  // Hold the submit handler to efficiently keep message history across re-renders
+  const submitHandler = React.useRef(null);
+  React.useEffect(() => {
+    if (submitHandler.current) {
+      return
+    }
+    submitHandler.current = new SubmitHandler({
+      completeMessageDetail,
+      currChatSessionId,
+      messageHistory,
+      persona,
+      setCompleteMessageDetail,
+      setCurrChatSessionId,
+      setChatState,
+      qgenAsistantId,
+      enableQgen,
+      onMessageHistoryChange: setMessageHistory
+    })
+  }, [chatState])
 
   const clearChat = () => {
     setCompleteMessageDetail({
@@ -471,14 +531,12 @@ export function useBackendChat({ chatId, qgenAsistantId, enableQgen }) {
     setCurrChatSessionId(null);
   };
 
-  // console.log('history', messageHistory);
-
   return {
     messages: messageHistory,
-    onSubmit: submitHandler.onSubmit,
-    isStreaming,
-    isCancelled,
+    onSubmit: submitHandler.current?.onSubmit,
+    chatState,
+    error,
     clearChat,
-    isFetchingRelatedQuestions,
+    wake,
   };
 }

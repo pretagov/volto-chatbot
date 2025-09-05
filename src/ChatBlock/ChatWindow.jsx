@@ -8,8 +8,8 @@ import AutoResizeTextarea from "./AutoResizeTextarea";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 import EmptyState from "./EmptyState";
 import { useScrollonStream, wakeApi } from "./lib";
-import { useBackendChat } from "./useBackendChat";
-import { SVGIcon } from "./utils";
+import { useBackendChat, ChatState } from './useBackendChat';
+import { SVGIcon } from './utils';
 
 import { sourcesForSelectedMessage } from "#stores/sidebarStore";
 import { usePrevious } from "@plone/volto/helpers";
@@ -19,41 +19,6 @@ import "./style.less";
 import config from "@plone/registry";
 
 export const IsSidebarContext = React.createContext(false);
-
-function useIsAwake() {
-  const [isAwake, setIsAwake] = React.useState(null);
-  const [error, setError] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!isAwake) {
-      return;
-    }
-    const rewakeDelayInMs =
-      config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
-    const timeout = setTimeout(() => {
-      setIsAwake(false);
-    }, rewakeDelayInMs);
-    return () => clearTimeout(timeout);
-  }, [isAwake]);
-
-  async function wake() {
-    try {
-      const wakeResult = await wakeApi();
-      setIsAwake(wakeResult);
-      localStorage.setItem("chat-last-awake", Date.now());
-    } catch (err) {
-      setIsAwake(false);
-      setError(err.message);
-    }
-  }
-
-  return {
-    isAwake,
-    wake,
-    setIsAwake,
-    error: error,
-  };
-}
 
 function ChatWindow({
   persona,
@@ -84,52 +49,25 @@ function ChatWindow({
   } = data;
   const [qualityCheckEnabled, setQualityCheckEnabled] = React.useState(true);
   const libs = { rehypePrism, remarkGfm }; // rehypePrism, remarkGfm
+  const abortController = React.useRef(new AbortController());
   const {
     onSubmit,
     messages,
-    isStreaming,
-    isFetchingRelatedQuestions,
+    chatState,
     clearChat,
+    error,
+    wake,
   } = useBackendChat({
     chatId: data.assistant,
     // persona,
     qgenAsistantId,
     enableQgen,
+    signal: abortController.current.signal,
   });
   const [showLandingPage, setShowLandingPage] = React.useState(false);
-  const { isAwake, wake, setIsAwake, error: wakeError } = useIsAwake();
-  const [canSubmit, setCanSubmit] = React.useState(null);
-
-  const isSidebar = React.useContext(IsSidebarContext);
-
-  // Update whether we can ask a question based on health check and streaming state
-  React.useEffect(() => {
-    if (canSubmit) {
-      if (isStreaming) {
-        setCanSubmit(false);
-      } else {
-        setIsAwake(true);
-        setCanSubmit(true);
-      }
-      if (!isAwake) {
-        setCanSubmit(false);
-      }
-      return;
-    }
-    if (isStreaming) {
-      wake();
-      setCanSubmit(false);
-      return;
-    }
-    if (canSubmit === null) {
-      setCanSubmit(isAwake);
-    }
-
-    if (isAwake) {
-      setCanSubmit(true);
-      return;
-    }
-  }, [isAwake, isStreaming]);
+  const isStreaming = chatState === ChatState.STREAMING;
+  const isAwake = chatState !== ChatState.ASLEEP;
+  const isFetchingRelatedQuestions = chatState === ChatState.FETCHING_RELATED;
 
   const textareaRef = React.useRef(null);
   const conversationRef = React.useRef(null);
@@ -252,21 +190,20 @@ function ChatWindow({
             </div>
           </>
         )}
-        {canSubmit === false && !isFetchingRelatedQuestions && (
+        {chatState !== ChatState.READY && (
           <div className="loader" />
         )}
       </div>
 
       <div className="chat-form">
-        {/* {![null, true].includes(canSubmit) && !isStreaming ? <div className="loader" /> : null} */}
         <Form>
-          {wakeError ? (
+          {error ? (
             <p
               id="chat-wake-error-message"
               aria-live="polite"
               className="ui red basic label form-error-label"
             >
-              {wakeError}
+              AbortError: {error}
             </p>
           ) : null}
           <div className="textarea-wrapper">
@@ -277,38 +214,15 @@ function ChatWindow({
               placeholder={
                 messages.length > 0 ? "Ask follow-up..." : placeholderPrompt
               }
-              disableSubmit={!canSubmit}
+              disableSubmit={chatState !== ChatState.READY}
               enableMatomoTracking={enableMatomoTracking}
               persona={persona}
               onSubmit={(submitHandlerInput) => {
                 sourcesForSelectedMessage.set([]);
                 onSubmit(submitHandlerInput);
               }}
-              onFocus={() => {
-                // Handle first touch starting the "awake" process
-                if (isAwake === null) {
-                  setIsAwake(false);
-                }
-                if (isAwake) {
-                  return;
-                }
-                wake();
-              }}
-              onChange={() => {
-                if (isAwake) {
-                  // TODO: Debouce this a little to improve performance when typing quickly
-                  localStorage.setItem("chat-last-awake", Date.now());
-                  return;
-                }
-                const rewakeDelayInMs =
-                  config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
-                if (
-                  Date.now() - rewakeDelayInMs >
-                  localStorage.getItem("chat-last-awake")
-                ) {
-                  wake();
-                }
-              }}
+              onFocus={wake}
+              onChange={wake}
             />
           </div>
         </Form>
