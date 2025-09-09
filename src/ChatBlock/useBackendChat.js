@@ -450,7 +450,8 @@ function extractJSON(str) {
 }
 
 export function useBackendChat({
-  persona,
+  // persona,
+  chatId,
   qgenAsistantId,
   enableQgen,
   signal,
@@ -513,7 +514,8 @@ export function useBackendChat({
       completeMessageDetail,
       currChatSessionId,
       messageHistory,
-      persona,
+      // persona,
+      chatId,
       setCompleteMessageDetail,
       setCurrChatSessionId,
       setChatState,
