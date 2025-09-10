@@ -58,8 +58,7 @@ function ChatWindow({
     error,
     wake,
   } = useBackendChat({
-    chatId: data.assistant,
-    // persona,
+    persona: data.assistant,
     qgenAsistantId,
     enableQgen,
     signal: abortController.current.signal,

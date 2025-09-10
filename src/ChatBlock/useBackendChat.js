@@ -113,7 +113,6 @@ class SubmitHandler {
    * @param {AbortSignal=} options.signal  Optional parameter for additional control of the abort signal. E.g. stopping the fetch from a button press.
    */
   constructor({
-    chatId,
     persona,
     setChatState,
     onMessageHistoryChange,
@@ -124,7 +123,7 @@ class SubmitHandler {
     enableQgen,
     signal,
   }) {
-    this.chatId = chatId;
+    this.persona = persona;
     this.chatTitle = chatTitle;
     this.setChatState = setChatState;
     this.onMessageHistoryChange = onMessageHistoryChange;
@@ -157,7 +156,7 @@ class SubmitHandler {
   } = {}) {
     if (this.currChatSessionId === null) {
       this.currChatSessionId = await createChatSession(
-        this.chatId,
+        this.persona,
         this.chatTitle,
       );
     }
@@ -241,7 +240,7 @@ class SubmitHandler {
     }
 
     // const currentAssistantId = this.persona.id;
-    const currentAssistantId = this.chatId;
+    const currentAssistantId = this.persona;
 
     this.setChatState(ChatState.STREAMING);
 
@@ -448,8 +447,7 @@ function extractJSON(str) {
 }
 
 export function useBackendChat({
-  // persona,
-  chatId,
+  persona,
   qgenAsistantId,
   enableQgen,
   signal,
@@ -513,8 +511,7 @@ export function useBackendChat({
     submitHandler.current = new SubmitHandler({
       completeMessageDetail,
       messageHistory,
-      // persona,
-      chatId,
+      persona,
       setCompleteMessageDetail,
       setChatState,
       qgenAsistantId,
