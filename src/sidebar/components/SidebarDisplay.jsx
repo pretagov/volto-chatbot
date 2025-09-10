@@ -21,18 +21,24 @@ import config from "@plone/registry";
 import loadable from "@loadable/component";
 const Markdown = loadable(() => import("react-markdown"));
 
-const ChatBlockDisplay = withDanswerData(({ assistant }) => [
-  "assistantData",
-  typeof assistant !== "undefined" && assistant !== null
-    ? superagent.get(`/_da/persona/${assistant}`).type("json")
-    : () => {},
-  assistant,
-])(function ChatBlockDisplay({ data, assistantData }) {
-  if (!assistantData) {
-    return null;
-  }
+// const ChatBlockDisplay = withDanswerData(({ assistant }) => [
+//   "assistantData",
+//   typeof assistant !== "undefined" && assistant !== null
+//     ? superagent.get(`/_da/persona/${assistant}`).type("json")
+//     : () => {},
+//   assistant,
+// ])(function ChatBlockDisplay({ data, assistantData }) {
+//   if (!assistantData) {
+//     return null;
+//   }
+//   return <ChatWindow persona={assistantData} {...data} />;
+// });
+function ChatBlockDisplay({ data, assistantData }) {
+  // if (!assistantData) {
+  //   return null;
+  // }
   return <ChatWindow persona={assistantData} {...data} />;
-});
+}
 
 const SideContent = injectLazyLibs(["luxon"])(function SideContent({
   sources,
