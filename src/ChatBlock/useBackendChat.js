@@ -31,6 +31,7 @@ export const ChatFileType = {
 };
 
 export const ChatState = Object.freeze({
+  AWAITING_START: 'awaitingStart',
   ASLEEP: 'asleep',
   READY: 'ready',
   STREAMING: 'awake',
@@ -458,7 +459,7 @@ export function useBackendChat({
 }) {
   const [error, setError] = React.useState('');
   const [currChatSessionId, setCurrChatSessionId] = React.useState(null);
-  const [chatState, setChatState] = React.useState(ChatState.ASLEEP);
+  const [chatState, setChatState] = React.useState(ChatState.AWAITING_START);
   const [messageHistory, setMessageHistory] = React.useState([]);
 
   const rewakeDelayInMs =
@@ -469,12 +470,14 @@ export function useBackendChat({
     const readyForWaking =
       Date.now() - rewakeDelayInMs < localStorage.getItem("chat-last-awake");
 
-    if (chatState !== ChatState.ASLEEP) {
+    if (chatState !== ChatState.ASLEEP && chatState !== ChatState.AWAITING_START) {
       if (readyForWaking) {
         localStorage.setItem("chat-last-awake", Date.now());
       }
       return;
     }
+
+    setChatState(ChatState.ASLEEP);
 
     try {
       const wakeResult = await wakeApi();

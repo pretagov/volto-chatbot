@@ -190,7 +190,7 @@ function ChatWindow({
             </div>
           </>
         )}
-        {chatState !== ChatState.READY && (
+        {[ChatState.ASLEEP || ChatState.STREAMING].includes(chatState) && (
           <div className="loader" />
         )}
       </div>
