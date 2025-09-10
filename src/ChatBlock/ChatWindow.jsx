@@ -91,8 +91,7 @@ function ChatWindow({
     isFetchingRelatedQuestions,
     clearChat,
   } = useBackendChat({
-    chatId: data.assistant,
-    // persona,
+    persona: data.assistant,
     qgenAsistantId,
     enableQgen,
   });

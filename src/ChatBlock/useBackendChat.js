@@ -97,7 +97,7 @@ function upsertToCompleteMessageMap({
 
 class SubmitHandler {
   constructor({
-    chatId,
+    persona,
     setIsStreaming,
     isCancelledRef,
     setIsCancelled,
@@ -111,7 +111,7 @@ class SubmitHandler {
     enableQgen,
     setIsFetchingRelatedQuestions,
   }) {
-    this.chatId = chatId;
+    this.persona = persona;
     this.chatTitle = chatTitle;
     this.setIsStreaming = setIsStreaming;
     this.isCancelledRef = isCancelledRef;
@@ -138,7 +138,7 @@ class SubmitHandler {
   } = {}) {
     if (this.currChatSessionId === null) {
       this.currChatSessionId = await createChatSession(
-        this.chatId,
+        this.persona,
         this.chatTitle,
       );
       this.setCurrChatSessionId(this.currChatSessionId);
@@ -223,7 +223,7 @@ class SubmitHandler {
     }
 
     // const currentAssistantId = this.persona.id;
-    const currentAssistantId = this.chatId;
+    const currentAssistantId = this.persona;
 
     this.setIsStreaming(true);
 
@@ -428,7 +428,7 @@ function extractJSON(str) {
   }
 }
 
-export function useBackendChat({ chatId, qgenAsistantId, enableQgen }) {
+export function useBackendChat({ persona, qgenAsistantId, enableQgen }) {
   const [isStreaming, setIsStreaming] = React.useState(false);
   const [isFetchingRelatedQuestions, setIsFetchingRelatedQuestions] =
     React.useState(false);
@@ -453,7 +453,7 @@ export function useBackendChat({ chatId, qgenAsistantId, enableQgen }) {
     currChatSessionId,
     isCancelledRef,
     messageHistory,
-    chatId,
+    persona,
     setCompleteMessageDetail,
     setCurrChatSessionId,
     setIsCancelled,
