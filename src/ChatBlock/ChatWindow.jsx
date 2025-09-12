@@ -189,7 +189,8 @@ function ChatWindow({
             </div>
           </>
         )}
-        {[ChatState.STREAMING].includes(chatState) && (
+        {/* TODO: Only show this if it's taking a while to prevent flashing. Could cause WCAG SC 2.3.1 failure. */}
+        {[ChatState.STREAMING, ChatState.SUBMITTING].includes(chatState) && (
           <div className="loader" />
         )}
       </div>
@@ -202,7 +203,7 @@ function ChatWindow({
               aria-live="polite"
               className="ui red basic label form-error-label"
             >
-              AbortError: {error}
+              {error}
             </p>
           ) : null}
           <div className="textarea-wrapper">
@@ -213,7 +214,8 @@ function ChatWindow({
               placeholder={
                 messages.length > 0 ? "Ask follow-up..." : placeholderPrompt
               }
-              disableSubmit={chatState !== ChatState.READY}
+              // disableSubmit={chatState !== ChatState.READY}
+              disableSubmit={false}
               enableMatomoTracking={enableMatomoTracking}
               persona={persona}
               onSubmit={(submitHandlerInput) => {

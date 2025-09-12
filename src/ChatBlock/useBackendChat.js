@@ -34,6 +34,7 @@ export const ChatState = Object.freeze({
   AWAITING_START: 'awaitingStart',
   ASLEEP: 'asleep',
   READY: 'ready',
+  SUBMITTING: 'submitting',
   STREAMING: 'awake',
   FETCHING_RELATED: 'fetchingRelated',
   ERRORED: 'error',
@@ -119,6 +120,7 @@ class SubmitHandler {
     chatTitle,
     qgenAsistantId,
     enableQgen,
+    setError,
     signal,
   }) {
     this.persona = persona;
@@ -127,6 +129,7 @@ class SubmitHandler {
     this.onMessageHistoryChange = onMessageHistoryChange;
     this.qgenAsistantId = qgenAsistantId;
     this.enableQgen = enableQgen;
+    this.setError = setError;
 
     this.onSubmit = this.onSubmit.bind(this);
     this.abortSignal = signal || null;
@@ -151,7 +154,15 @@ class SubmitHandler {
   completeMessageDetail = {
       sessionId: null,
       messageMap: new Map(),
+  }
+    
+  // Resets error if no message is passed
+  handlePacketTimeout(message, promise) {
+    this.setError(message || '');
+    if (promise) {
+      promise.return();
     }
+  }
 
   async onSubmit({
     messageIdToResend,
@@ -282,13 +293,28 @@ class SubmitHandler {
 
     await delay(50);
 
+    const packetWarningTime = 10000;
+    const packetErrorTime = 15000;
+    let warningTimeout = setTimeout(() => {
+      this.handlePacketTimeout(promise);
+    }, packetWarningTime);
+    let errorTimeout = setTimeout(() => {
+      this.handlePacketTimeout(promise);
+    }, packetErrorTime);
+
     for await (const bit of promise) {
+      clearTimeout(warningTimeout);
+      clearTimeout(errorTimeout);
+      this.handlePacketTimeout()
+      
       if (bit.error) {
         stack.error = bit.error;
         throw bit.error
       } else if (bit.isComplete) {
         stack.isComplete = true;
       } else {
+        warningTimeout = setTimeout(() => {this.handlePacketTimeout("Chat is taking a long time to reply.") }, packetWarningTime);
+        errorTimeout = setTimeout(() => {this.handlePacketTimeout("No response was received from the chat, stopping", promise) }, packetErrorTime);
         stack.push(bit.packet);
       }
 
@@ -400,6 +426,7 @@ class SubmitHandler {
       }
     }
 
+
     if (
       newCompleteMessageDetail.messageMap &&
       this.enableQgen &&
@@ -457,12 +484,17 @@ export function useBackendChat({
   enableQgen,
   signal,
 }) {
-  const [error, setError] = React.useState('');
+  const [error, _setError] = React.useState('');
   const [chatState, setChatState] = React.useState(ChatState.AWAITING_START);
   const [messageHistory, setMessageHistory] = React.useState([]);
 
   const rewakeDelayInMs =
     config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
+  
+  function setError(error) {
+    _setError(error);
+    setChatState(ChatState.ERRORED);
+  }
 
   /** Try to wake up the API. Will early return if already awake */
   async function wake() {
@@ -473,21 +505,20 @@ export function useBackendChat({
       if (readyForWaking) {
         localStorage.setItem("chat-last-awake", Date.now());
       }
-      return;
+      return true;
     }
-
-    setChatState(ChatState.ASLEEP);
 
     try {
       const wakeResult = await wakeApi();
       if (!!wakeResult) {
         setChatState(ChatState.READY);
         localStorage.setItem("chat-last-awake", Date.now());
+        return true
       }
     } catch (err) {
-      setChatState(ChatState.ERRORED);
       setError(err.message);
     }
+    return false
   }
   React.useEffect(() => {
     if (chatState === ChatState.ASLEEP) {
@@ -504,6 +535,7 @@ export function useBackendChat({
   // Hold the submit handler to efficiently keep message history across re-renders
   const submitHandler = React.useRef(null);
   React.useEffect(() => {
+    // Handle persona being both a full persona call or just an assistant ID if we didn't make the call
     const currentPersona = submitHandler.current?.persona?.id || submitHandler.current?.persona;
     const newPersona = persona?.id || persona;
 
@@ -515,6 +547,7 @@ export function useBackendChat({
       messageHistory,
       persona,
       setChatState,
+      setError,
       qgenAsistantId,
       enableQgen,
       onMessageHistoryChange: setMessageHistory
@@ -528,9 +561,30 @@ export function useBackendChat({
     }
   };
 
+  // wakeApi
+  const handleSubmit = React.useCallback(function handleSubmit(input) {
+    const onSubmit = submitHandler.current?.onSubmit;
+
+    if (!onSubmit) {
+      throw new Error("TESTING: NO SUBMISSION HANDLER")
+    }
+
+    setChatState(ChatState.SUBMITTING);
+
+    wake().then((isAwake) => {
+      if (isAwake) {
+        onSubmit(input)
+      }
+    }).catch((errorReason) => {
+      setChatState(ChatState.ERRORED);
+      setError(errorReason);
+    })
+  }, [])
+
   return {
     messages: messageHistory,
-    onSubmit: submitHandler.current?.onSubmit,
+    // onSubmit: submitHandler.current?.onSubmit,
+    onSubmit: handleSubmit,
     chatState,
     error,
     clearChat,
