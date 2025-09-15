@@ -589,7 +589,7 @@ export function useBackendChat({
       setChatState(ChatState.ERRORED);
       setError(errorReason);
     })
-  }, [])
+  }, [chatState])
 
   return {
     messages: messageHistory,
