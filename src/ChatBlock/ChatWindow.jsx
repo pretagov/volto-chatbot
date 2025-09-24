@@ -218,8 +218,12 @@ function ChatWindow({
                 sourcesForSelectedMessage.set([]);
                 onSubmit(submitHandlerInput);
               }}
-              onFocus={wake}
-              onChange={wake}
+              onFocus={() => {
+                wake(chatState);
+              }}
+              onChange={() => {
+                wake(chatState);
+              }}
             />
           </div>
         </Form>
