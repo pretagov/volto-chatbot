@@ -36,7 +36,7 @@ export const ChatState = Object.freeze({
   WAKING: 'waking',
   READY: 'ready',
   SUBMITTING: 'submitting',
-  STREAMING: 'awake',
+  STREAMING: 'streaming',
   FETCHING_RELATED: 'fetchingRelated',
   ERRORED: 'error',
 });
@@ -505,7 +505,10 @@ export function useBackendChat({
    */
   async function wake(currentChatState) {
     const readyForWaking =
-      Date.now() - rewakeDelayInMs < localStorage.getItem("chat-last-awake");
+      Date.now() - rewakeDelayInMs > localStorage.getItem("chat-last-awake");
+    if (currentChatState === ChatState.ERRORED) {
+      return false;
+    }
 
     if (readyForWaking) {
       localStorage.setItem("chat-last-awake", Date.now());
@@ -513,7 +516,7 @@ export function useBackendChat({
     if (currentChatState === ChatState.WAKING) {
       return false;
     }
-    if (![ChatState.ASLEEP, ChatState.AWAITING_START].includes(currentChatState)) {
+    if (![ChatState.ASLEEP, ChatState.AWAITING_START, ChatState.SUBMITTING].includes(currentChatState)) {
       return true;
     }
 
@@ -588,6 +591,7 @@ export function useBackendChat({
       throw new Error("TESTING: NO SUBMISSION HANDLER")
     }
 
+    setError(null);
     setChatState(ChatState.SUBMITTING);
     setMessageToSubmit(input)
   }, [chatState])
