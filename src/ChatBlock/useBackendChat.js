@@ -299,8 +299,8 @@ class SubmitHandler {
 
     await delay(50);
 
-    const packetWarningTime = 15000;
-    const packetErrorTime = 25000;
+    const packetWarningTime = 25000;
+    const packetErrorTime = 60000;
     let warningTimeout = setTimeout(() => {
       this.handlePacketTimeout("Chat is taking a long time to reply.");
     }, packetWarningTime);
