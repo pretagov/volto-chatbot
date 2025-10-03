@@ -210,8 +210,9 @@ function ChatWindow({
               placeholder={
                 messages.length > 0 ? "Ask follow-up..." : placeholderPrompt
               }
-              // disableSubmit={chatState !== ChatState.READY}
-              disableSubmit={false}
+              disableSubmit={[ChatState.STREAMING].includes(
+                chatState,
+              )}
               enableMatomoTracking={enableMatomoTracking}
               persona={persona}
               onSubmit={(submitHandlerInput) => {

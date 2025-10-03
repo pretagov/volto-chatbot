@@ -174,10 +174,15 @@ class SubmitHandler {
     message,
   } = {}) {
     if (this.currChatSessionId === null) {
-      this.currChatSessionId = await createChatSession(
-        this.persona,
-        this.chatTitle,
-      );
+      try {
+        this.currChatSessionId = await createChatSession(
+          this.persona,
+          this.chatTitle,
+        );
+      } catch (error) {
+        this.setError("Failed to create a chat session.");
+        return;
+      }
     }
 
     let newCompleteMessageDetail = {};
@@ -553,11 +558,12 @@ export function useBackendChat({
     if (chatState === ChatState.ASLEEP) {
       return;
     }
-    const timeout = setTimeout(() => {
-      if (chatState === ChatState.READY) {
-        setChatState(ChatState.ASLEEP);
-      }
-    }, rewakeDelayInMs);
+    let timeout = null;
+    if (chatState === ChatState.READY) {
+      timeout = setTimeout(() => {
+          setChatState(ChatState.ASLEEP);
+        }, rewakeDelayInMs);
+    }
     return () => clearTimeout(timeout);
   }, [chatState]);
 
@@ -594,17 +600,20 @@ export function useBackendChat({
     }
   };
 
-  const handleSubmit = React.useCallback(function handleSubmit(input) {
-    const onSubmit = submitHandler.current?.onSubmit;
+  const handleSubmit = React.useCallback(
+    function handleSubmit(input) {
+      const onSubmit = submitHandler.current?.onSubmit;
 
-    if (!onSubmit) {
-      throw new Error("TESTING: NO SUBMISSION HANDLER")
-    }
+      if (!onSubmit) {
+        throw new Error("TESTING: NO SUBMISSION HANDLER");
+      }
 
-    setError(null);
-    setChatState(ChatState.SUBMITTING);
-    setMessageToSubmit(input)
-  }, [chatState])
+      setError(null);
+      setChatState(ChatState.SUBMITTING);
+      setMessageToSubmit(input);
+    },
+    [chatState],
+  );
   React.useEffect(() => {
     if (chatState !== ChatState.SUBMITTING) {
       return;
@@ -612,22 +621,18 @@ export function useBackendChat({
     if (!messageToSubmit) {
       return;
     }
-    wake(chatState)
-      .then((isAwake) => {
-        if (isAwake) {
-          const onSubmit = submitHandler.current?.onSubmit;
-          onSubmit(messageToSubmit);
-        }
-      })
-      .catch((errorReason) => {
-        setChatState(ChatState.ERRORED);
-        setError(
-          errorReason instanceof Error ? errorReason.message : errorReason,
-        );
-      })
-      .finally(() => {
-        setMessageToSubmit(null);
-      });
+
+    const onSubmit = submitHandler.current?.onSubmit;
+
+    try {
+      onSubmit(messageToSubmit);
+    } catch (errorReason) {
+      setChatState(ChatState.ERRORED);
+      setError(
+        errorReason instanceof Error ? errorReason.message : errorReason,
+      );
+    }
+    setMessageToSubmit(null);
   }, [messageToSubmit, chatState, wake]);
 
   return {
