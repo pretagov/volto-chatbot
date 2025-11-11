@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { visit } from 'unist-util-visit';
 import loadable from '@loadable/component';
-import { Button, Message, MessageContent } from 'semantic-ui-react';
+import { Button, Message, MessageContent, Icon } from 'semantic-ui-react';
 import { trackEvent } from '@eeacms/volto-matomo/utils';
 import { SourceDetails } from './Source';
 import { SVGIcon, useCopyToClipboard } from './utils';
@@ -54,6 +55,66 @@ export function ToolCall({ tool_args, tool_name }) {
   }
   return null;
 }
+
+export function AgentThinking({ thinkingSteps, isStreaming }) {
+  // Fail loudly if invalid props
+  if (!Array.isArray(thinkingSteps)) {
+    throw new Error('AgentThinking: thinkingSteps must be an array');
+  }
+  if (typeof isStreaming !== 'boolean') {
+    throw new Error('AgentThinking: isStreaming must be a boolean');
+  }
+
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  useEffect(() => {
+    // Auto-collapse when streaming completes
+    if (!isStreaming && isExpanded) {
+      setIsExpanded(false);
+    }
+  }, [isStreaming, isExpanded]);
+
+  // Don't render if no thinking steps
+  if (thinkingSteps.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="agent-thinking">
+      <div
+        className="thinking-header"
+        onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-controls="thinking-steps-content"
+      >
+        <Icon name={isExpanded ? 'chevron down' : 'chevron right'} />
+        <span>Agent thinking ({thinkingSteps.length} steps)</span>
+      </div>
+      {isExpanded && (
+        <div id="thinking-steps-content" className="thinking-steps">
+          {thinkingSteps.map((step, idx) => (
+            <div key={idx} className="thinking-step">
+              {step}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+AgentThinking.propTypes = {
+  thinkingSteps: PropTypes.array.isRequired,
+  isStreaming: PropTypes.bool.isRequired,
+};
 
 function addQualityMarkersPlugin() {
   return function (tree) {
@@ -390,6 +451,13 @@ export function ChatMessageBubble(props) {
             message.toolCalls?.map((info, index) => (
               <ToolCall key={index} {...info} />
             ))}
+
+          {!isUser && message.agentThinking && message.agentThinking.length > 0 && (
+            <AgentThinking
+              thinkingSteps={message.agentThinking}
+              isStreaming={isLoading}
+            />
+          )}
 
           {Object.keys(documents).length > 0 &&
             blockData.displayMode === 'sidebar' && (

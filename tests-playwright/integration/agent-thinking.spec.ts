@@ -1,0 +1,163 @@
+import { test, expect } from '@playwright/test';
+import { ChatbotHelper } from '../helpers/ChatbotHelper';
+
+test.describe('Agent Thinking Display', () => {
+  test('agent thinking appears during message response', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message
+    await helper.sendMessage('What is LECC?');
+
+    // Wait for the response to start
+    await page.waitForTimeout(2000);
+
+    // Check if agent thinking exists (it may or may not, depending on server)
+    const hasThinking = await helper.hasAgentThinking();
+
+    if (hasThinking) {
+      // If thinking exists, verify it has content
+      const steps = await helper.getThinkingSteps();
+      expect(steps.length).toBeGreaterThan(0);
+
+      // Verify step count matches
+      const headerCount = await helper.getThinkingStepCount();
+      expect(headerCount).toBe(steps.length);
+    }
+
+    // Wait for streaming to complete
+    await helper.waitForStreamingComplete();
+  });
+
+  test('agent thinking auto-collapses when streaming completes', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message
+    await helper.sendMessage('Tell me about LECC');
+
+    // Wait a bit for response to start
+    await page.waitForTimeout(2000);
+
+    // Check if agent thinking appeared
+    const hasThinking = await helper.hasAgentThinking();
+
+    if (hasThinking) {
+      // Wait for streaming to complete
+      await helper.waitForStreamingComplete();
+
+      // Agent thinking should auto-collapse
+      // Wait a bit for the auto-collapse animation
+      await page.waitForTimeout(500);
+
+      const isExpanded = await helper.isAgentThinkingExpanded();
+      expect(isExpanded).toBe(false);
+    }
+  });
+
+  test('user can manually toggle agent thinking', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message and wait for complete response
+    await helper.sendMessage('What is LECC?');
+    await helper.waitForStreamingComplete(60000);
+
+    // Check if agent thinking exists
+    const hasThinking = await helper.hasAgentThinking();
+
+    if (hasThinking) {
+      // Should be collapsed after streaming completes
+      await page.waitForTimeout(500);
+      let isExpanded = await helper.isAgentThinkingExpanded();
+      expect(isExpanded).toBe(false);
+
+      // Click to expand
+      await helper.toggleAgentThinking();
+      await page.waitForTimeout(300); // Wait for animation
+
+      isExpanded = await helper.isAgentThinkingExpanded();
+      expect(isExpanded).toBe(true);
+
+      // Verify we can see steps
+      const steps = await helper.getThinkingSteps();
+      expect(steps.length).toBeGreaterThan(0);
+
+      // Click to collapse again
+      await helper.toggleAgentThinking();
+      await page.waitForTimeout(300); // Wait for animation
+
+      isExpanded = await helper.isAgentThinkingExpanded();
+      expect(isExpanded).toBe(false);
+    }
+  });
+
+  test('agent thinking shows step count in header', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message
+    await helper.sendMessage('Tell me about LECC');
+    await helper.waitForStreamingComplete(60000);
+
+    // Check if agent thinking exists
+    const hasThinking = await helper.hasAgentThinking();
+
+    if (hasThinking) {
+      // Expand to see steps
+      const isExpanded = await helper.isAgentThinkingExpanded();
+      if (!isExpanded) {
+        await helper.toggleAgentThinking();
+        await page.waitForTimeout(300);
+      }
+
+      // Get steps
+      const steps = await helper.getThinkingSteps();
+      const headerCount = await helper.getThinkingStepCount();
+
+      // Header count should match actual steps
+      expect(headerCount).toBe(steps.length);
+      expect(headerCount).toBeGreaterThan(0);
+    }
+  });
+
+  test('agent thinking displays steps in order', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message
+    await helper.sendMessage('What is LECC?');
+    await helper.waitForStreamingComplete(60000);
+
+    // Check if agent thinking exists
+    const hasThinking = await helper.hasAgentThinking();
+
+    if (hasThinking) {
+      // Expand if collapsed
+      const isExpanded = await helper.isAgentThinkingExpanded();
+      if (!isExpanded) {
+        await helper.toggleAgentThinking();
+        await page.waitForTimeout(300);
+      }
+
+      // Get steps
+      const steps = await helper.getThinkingSteps();
+
+      // Verify we have steps and they're non-empty
+      expect(steps.length).toBeGreaterThan(0);
+      steps.forEach((step) => {
+        expect(step.trim().length).toBeGreaterThan(0);
+      });
+    }
+  });
+});

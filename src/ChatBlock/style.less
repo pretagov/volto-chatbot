@@ -134,6 +134,65 @@ mark {
       padding-bottom: 0.2em;
       font-size: small;
     }
+
+    .agent-thinking {
+      margin-bottom: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      background-color: #f8f9fa;
+      overflow: hidden;
+
+      .thinking-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        cursor: pointer;
+        user-select: none;
+        font-size: 0.9em;
+        color: #666;
+
+        &:hover {
+          background-color: #f0f1f2;
+        }
+
+        &:focus {
+          outline: 2px solid @blue;
+          outline-offset: -2px;
+        }
+
+        i.icon {
+          transition: transform 0.2s ease;
+        }
+      }
+
+      .thinking-steps {
+        padding: 8px 12px 12px 32px;
+        border-top: 1px solid #e8e9ea;
+        max-height: 300px;
+        overflow-y: auto;
+        animation: slideDown 0.2s ease-out;
+
+        .thinking-step {
+          padding: 4px 0;
+          font-size: 0.85em;
+          color: #555;
+          font-style: italic;
+          line-height: 1.4;
+        }
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          max-height: 0;
+        }
+        to {
+          opacity: 1;
+          max-height: 300px;
+        }
+      }
+    }
   }
 
   .chat-related-questions {

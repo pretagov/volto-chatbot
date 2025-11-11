@@ -1,0 +1,29 @@
+{
+  "title": "Document",
+  "properties": {
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "blocks": {
+      "title": "Blocks",
+      "type": "object"
+    },
+    "blocks_layout": {
+      "title": "Blocks Layout",
+      "type": "object"
+    }
+  },
+  "required": ["title"],
+  "fieldsets": [
+    {
+      "id": "default",
+      "title": "Default",
+      "fields": ["title", "description"]
+    }
+  ]
+}

@@ -268,6 +268,7 @@ class SubmitHandler {
     this.setChatState(ChatState.STREAMING);
 
     let answer = '';
+    let agentThinking = [];
     let query = null;
     let retrievalType = RetrievalType.None;
     let documents = []; // selectedDocuments;
@@ -356,6 +357,8 @@ class SubmitHandler {
 
           if (Object.hasOwn(packet, 'answer_piece')) {
             answer += packet.answer_piece;
+          } else if (Object.hasOwn(packet, 'agent_piece')) {
+            agentThinking.push(packet.agent_piece);
           } else if (Object.hasOwn(packet, 'top_documents')) {
             documents = packet.top_documents;
             query = packet.rephrased_query;
@@ -415,6 +418,7 @@ class SubmitHandler {
               citations: finalMessage?.citations || {},
               files: finalMessage?.files || aiMessageImages || [],
               toolCalls: finalMessage?.tool_calls || toolCalls,
+              agentThinking: agentThinking,
               parentMessageId: newUserMessageId,
               alternateAssistantID: null, // alternativeAssistant?.id,
             },
