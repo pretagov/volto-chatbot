@@ -6,7 +6,7 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   testIgnore: '**/src/**',
   timeout: 30000,
-  fullyParallel: true,
+  fullyParallel: !!process.env.CI,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
@@ -42,9 +42,8 @@ export default defineConfig({
       // NOTE: Dependencies must be built once first with: pnpm build:deps
       name: 'Frontend',
       command:
-        'PORT=4001 RAZZLE_API_PATH=http://localhost:9000 VOLTOCONFIG=$(pwd)/volto.config.js pnpm --filter @plone/volto start',
+        'PORT=4001 RAZZLE_API_PATH=http://localhost:9000 ADDONS=@eeacms/volto-chatbot pnpm --filter @plone/volto start',
       port: 4001,
-      cwd: path.join(__dirname, '../../..'), // Run from admin project root
       // url: 'http://localhost:4001/', // Health check on SSR server (returns 200 when webpack ready)
       timeout: 300 * 1000, // 5 minutes for initial webpack compilation
       reuseExistingServer: true, // Always reuse - expect it to be running manually
