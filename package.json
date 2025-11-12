@@ -65,6 +65,7 @@
     "bootstrap": "npm install -g ejs; npm link ejs; node bootstrap",
     "test": "make test",
     "test:fix": "make test-update",
+    "test:playwright:start-backend": "node tests-playwright/fixtures/mock-plone-server.js",
     "test:playwright": "playwright test --config=tests-playwright/playwright.config.ts",
     "test:playwright:headed": "playwright test --config=tests-playwright/playwright.config.ts --headed",
     "test:playwright:ui": "playwright test --config=tests-playwright/playwright.config.ts --ui",

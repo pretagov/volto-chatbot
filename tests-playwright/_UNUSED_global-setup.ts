@@ -4,7 +4,7 @@ import * as path from 'path';
 
 let serverProcess: ChildProcess | null = null;
 
-async function waitForServer(url: string, timeout: number = 10000): Promise<void> {
+async function waitForServer(url: string, timeout: number = 100000): Promise<void> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
     try {
