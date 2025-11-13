@@ -49,6 +49,11 @@ jobs:
           cd volto-project
           pnpm install
 
+      - name: Install Playwright
+        run: |
+          cd volto-project
+          pnpm add -D @playwright/test
+
       - name: Install Playwright browsers
         run: |
           cd volto-project
