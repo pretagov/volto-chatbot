@@ -62,7 +62,7 @@ jobs:
       - name: Build Volto dependencies
         run: |
           cd volto-project
-          pnpm build-deps
+          pnpm --filter @plone/volto build
 
       - name: Install Playwright browsers
         run: |
