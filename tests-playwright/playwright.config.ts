@@ -35,6 +35,7 @@ export default defineConfig({
       url: 'http://localhost:9000/health',
       timeout: 30 * 1000,
       reuseExistingServer: !process.env.CI,
+      cwd: process.cwd(), // Run from wherever playwright is invoked (project root)
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
@@ -54,6 +55,7 @@ export default defineConfig({
       url: 'http://localhost:4002/health', // Health check on webpack-dev-server (returns 200 when ready)
       timeout: 300 * 1000, // 5 minutes for initial webpack compilation
       reuseExistingServer: !process.env.CI, // Reuse in local dev, start fresh in CI
+      cwd: process.cwd(), // Run from wherever playwright is invoked (project root)
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
