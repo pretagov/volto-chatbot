@@ -49,6 +49,11 @@ jobs:
           cd volto-project
           pnpm install
 
+      - name: Install addon dependencies
+        run: |
+          cd volto-chatbot
+          pnpm install
+
       - name: Install Playwright
         run: |
           cd volto-project
