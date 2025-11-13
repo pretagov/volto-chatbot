@@ -31,11 +31,10 @@ export default defineConfig({
     {
       // Mock Plone API server - must start BEFORE Volto
       name: 'Mock API',
-      command: 'node fixtures/mock-plone-server.js',
+      command: `node ${path.join(__dirname, 'fixtures/mock-plone-server.js')}`,
       url: 'http://localhost:9000/health',
       timeout: 30 * 1000,
       reuseExistingServer: !process.env.CI,
-      cwd: path.join(__dirname, '.'), // Run from tests-playwright directory
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
