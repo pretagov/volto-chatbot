@@ -76,9 +76,8 @@ export class ChatbotHelper {
    */
   async getMessageText(index: number): Promise<string> {
     const message = this.getMessage(index);
-    // Get the message content div
-    const content = message.locator('.comment > div').first();
-    return await content.textContent() || '';
+    // Get the text content directly from the message element
+    return await message.textContent() || '';
   }
 
   /**
