@@ -55,13 +55,11 @@ export default defineConfig({
       url: 'http://localhost:4002/health', // Health check on webpack-dev-server (returns 200 when ready)
       timeout: 300 * 1000, // 5 minutes for initial webpack compilation
       reuseExistingServer: !process.env.CI, // Reuse in local dev, start fresh in CI
-      cwd: path.join(__dirname, '../../..'), // Run from workspace root
       stdout: 'pipe',
       stderr: 'pipe',
       env: {
         PORT: '4001',
         RAZZLE_API_PATH: 'http://localhost:9000',
-        VOLTOCONFIG: path.join(__dirname, '../../../volto.config.js'),
         ADDONS: '@eeacms/volto-chatbot',
         // Prevent parcel from trying to access TTY
         CI: process.env.CI || 'true',

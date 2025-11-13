@@ -57,7 +57,7 @@ jobs:
       - name: Run Playwright tests
         run: |
           cd volto-project
-          pnpm --filter @eeacms/volto-chatbot test:playwright
+          pnpm playwright test --config=src/addons/volto-chatbot/tests-playwright/playwright.config.ts
         env:
           CI: true
 
