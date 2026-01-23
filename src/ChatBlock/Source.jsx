@@ -34,6 +34,7 @@ const SourceDetails_ = ({ source, index, luxon }) => {
   const {
     link,
     blurb,
+    match_highlights,
     updated_at,
     source_type,
     semantic_identifier = 'untitled document',
@@ -68,33 +69,39 @@ const SourceDetails_ = ({ source, index, luxon }) => {
               <span>{relativeTime}</span>
             </div>
           )}
-          {blurb && (
+          {match_highlights?.filter(Boolean).length > 0 ? (
+            <div className="source-desc">
+              {match_highlights.filter(Boolean).map((text, i) => (
+                <span key={i} dangerouslySetInnerHTML={{ __html: text }} />
+              ))}
+            </div>
+          ) : blurb && (
             <div className="source-desc">
               <Markdown
                 components={{
                   p: (props) => {
                     const { node, ...rest } = props;
-                    const value = node.children?.[0]?.value || ""; 
+                    const value = node.children?.[0]?.value || "";
                     return value;
                   },
                   a: (props) => {
                     const { node, ...rest } = props;
-                    const value = node.children?.[0]?.value || ""; 
+                    const value = node.children?.[0]?.value || "";
                     return value;
                   },
                   h1: (props) => {
                     const { node, ...rest } = props;
-                    const value = node.children?.[0]?.value || ""; 
+                    const value = node.children?.[0]?.value || "";
                     return `${value}. `;
                   },
                   h2: (props) => {
                     const { node, ...rest } = props;
-                    const value = node.children?.[0]?.value || ""; 
+                    const value = node.children?.[0]?.value || "";
                     return `${value}. `;
                   },
                   h3: (props) => {
                     const { node, ...rest } = props;
-                    const value = node.children?.[0]?.value || ""; 
+                    const value = node.children?.[0]?.value || "";
                     return `${value}. `;
                   },
                   ul: (props) => {
