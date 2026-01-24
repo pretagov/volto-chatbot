@@ -73,3 +73,26 @@ export function convertToPercentage(floatValue, digits = 2) {
   }
   return (floatValue * 100).toFixed(digits) + '%';
 }
+
+/**
+ * Get display name for a document source.
+ * Falls back to link/URL if semantic_identifier is empty.
+ * @param {Object} source - The source document object
+ * @returns {string} The display name to use
+ */
+export function getSourceDisplayName(source) {
+  if (source?.semantic_identifier) {
+    return source.semantic_identifier;
+  }
+  if (source?.link) {
+    try {
+      const url = new URL(source.link);
+      // Return pathname without leading slash, or hostname if path is just "/"
+      const path = url.pathname === '/' ? url.hostname : url.pathname.slice(1);
+      return path || source.link;
+    } catch {
+      return source.link;
+    }
+  }
+  return 'Untitled document';
+}

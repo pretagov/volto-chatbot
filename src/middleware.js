@@ -4,6 +4,8 @@ import debug from 'debug';
 
 const log = debug('volto-chatbot');
 
+const apiPrefix = process.env.DANSWER_API_PREFIX ?? '/api';
+
 let cached_auth_cookie = null;
 let last_fetched = null;
 let maxAge;
@@ -14,7 +16,7 @@ const MSG_FETCH_COOKIE = 'Error while fetching authentication cookie';
 const MSG_ERROR_REQUEST = 'Error in processing request to Danswer';
 
 async function get_login_cookie(username, password) {
-  const url = `${process.env.DANSWER_URL}/api/auth/login`;
+  const url = `${process.env.DANSWER_URL}${apiPrefix}/auth/login`;
   const data = {
     username,
     password,
@@ -52,7 +54,7 @@ async function login(username, password) {
 }
 
 async function check_credentials() {
-  const reqUrl = `${process.env.DANSWER_URL}/api/persona/-1`;
+  const reqUrl = `${process.env.DANSWER_URL}${apiPrefix}/persona/-1`;
 
   const options = {
     method: 'GET',
@@ -125,7 +127,7 @@ async function send_danswer_request(
 export default async function middleware(req, res, next) {
   const path = req.url.replace('/_da/', '/');
 
-  const reqUrl = `${process.env.DANSWER_URL}/api${path}`;
+  const reqUrl = `${process.env.DANSWER_URL}${apiPrefix}${path}`;
 
   const username = process.env.DANSWER_USERNAME;
   const password = process.env.DANSWER_PASSWORD;

@@ -117,6 +117,20 @@ app.post('/api/chat/send-message', (req, res) => {
     // Agent thinking (tool call)
     { tool_name: 'run_search', tool_args: { query: message } },
 
+    // Agent sub-answer thinking steps (like Danswer's agent thinking)
+    {
+      level: null,
+      level_question_num: null,
+      answer_piece: 'Searching through available documents',
+      answer_type: 'agent_sub_answer'
+    },
+    {
+      level: null,
+      level_question_num: null,
+      answer_piece: 'Found relevant information in 1 document',
+      answer_type: 'agent_sub_answer'
+    },
+
     // Search results
     {
       level: null,
@@ -132,7 +146,8 @@ app.post('/api/chat/send-message', (req, res) => {
       ],
     },
 
-    // Answer chunks - split the response into words for streaming effect
+    // Answer chunks - include reasoning model thinking tags and regular content
+    { answer_piece: '<thinking>Analyzing the question and documents to formulate a response.</thinking>' },
     ...`This is a test response to your question: "${message}". The chatbot is working correctly in test mode.`
       .split(' ')
       .map((word) => ({ answer_piece: word + ' ' })),

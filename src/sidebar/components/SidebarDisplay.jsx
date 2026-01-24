@@ -1,11 +1,14 @@
 import {
   selectedSidebarChatbot,
   sourcesForSelectedMessage,
+  newChatTrigger,
 } from "#stores/sidebarStore";
 import ChatWindow from "@eeacms/volto-chatbot/ChatBlock/ChatWindow";
 import { useStore } from "@nanostores/react";
 import Icon from "@plone/volto/components/theme/Icon/Icon";
 import { Button } from "semantic-ui-react";
+import { SVGIcon } from "../../ChatBlock/utils";
+import PenIcon from "../../icons/square-pen.svg";
 
 // ChatBlock
 import { getBlocksFieldname } from "@plone/volto/helpers";
@@ -13,6 +16,7 @@ import { injectLazyLibs } from "@plone/volto/helpers/Loadable/Loadable";
 import { forwardRef } from "react";
 import superagent from "superagent";
 import withDanswerData from "../../ChatBlock/withDanswerData";
+import { getSourceDisplayName } from "../../ChatBlock/utils";
 
 import clearSVG from "@plone/volto/icons/clear.svg";
 
@@ -67,7 +71,7 @@ const SideContent = injectLazyLibs(["luxon"])(function SideContent({
                 <div className="all-sources-display__header">
                   <div className="chat-citation">{index + 1}</div>
                   <a href={source.link}>
-                    <h3>{source.semantic_identifier}</h3>
+                    <h3>{getSourceDisplayName(source)}</h3>
                   </a>
                 </div>
                 <time dateTime={source.updated_at}>
@@ -87,9 +91,9 @@ const SideContent = injectLazyLibs(["luxon"])(function SideContent({
                           return value;
                         },
                         a: (props) => {
-                          const { node, ...rest } = props;
-                          const value = node.children?.[0]?.value || "";
-                          return value;
+                          const { node, href } = props;
+                          const value = node.children?.[0]?.value || href || "";
+                          return <a href={href} target="_blank" rel="noreferrer">{value}</a>;
                         },
                         h1: (props) => {
                           const { node, ...rest } = props;
@@ -187,6 +191,17 @@ export const SidebarDisplay = forwardRef(function SidebarDisplay(
                   <Icon circled name={clearSVG} size="48px" />
                 </Button>
               )}
+              <Button
+                type="button"
+                className="new-chat-btn"
+                aria-label="New chat"
+                title="New chat"
+                onClick={() => {
+                  newChatTrigger.set(newChatTrigger.get() + 1);
+                }}
+              >
+                <SVGIcon name={PenIcon} size="18" />
+              </Button>
               <h2 id="dialog_heading">{sidebarTitle}</h2>
             </div>
             <ChatBlockDisplay

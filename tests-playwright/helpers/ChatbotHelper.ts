@@ -208,4 +208,42 @@ export class ChatbotHelper {
   async waitForChatbotReady(timeout: number = 30000): Promise<void> {
     await this.getChatInput().waitFor({ state: 'visible', timeout });
   }
+
+  /**
+   * Get the error message element
+   */
+  getErrorMessage(): Locator {
+    return this.page.locator('#chat-wake-error-message');
+  }
+
+  /**
+   * Check if an error is displayed
+   */
+  async hasError(): Promise<boolean> {
+    const error = this.getErrorMessage();
+    return await error.isVisible();
+  }
+
+  /**
+   * Get the error message text
+   */
+  async getErrorText(): Promise<string> {
+    const error = this.getErrorMessage();
+    return await error.textContent() || '';
+  }
+
+  /**
+   * Wait for an error to appear
+   */
+  async waitForError(timeout: number = 30000): Promise<void> {
+    await this.getErrorMessage().waitFor({ state: 'visible', timeout });
+  }
+
+  /**
+   * Get the current value of the chat input
+   */
+  async getInputValue(): Promise<string> {
+    const input = this.getChatInput();
+    return await input.inputValue();
+  }
 }

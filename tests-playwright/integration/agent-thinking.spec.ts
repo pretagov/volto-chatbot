@@ -160,4 +160,77 @@ test.describe('Agent Thinking Display', () => {
       });
     }
   });
+
+  test('agent thinking captures agent_sub_answer messages', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message to trigger agent thinking
+    await helper.sendMessage('Test agent sub-answer');
+    await helper.waitForStreamingComplete(60000);
+
+    // Agent thinking should exist
+    const hasThinking = await helper.hasAgentThinking();
+    expect(hasThinking).toBe(true);
+
+    // Expand to see steps
+    const isExpanded = await helper.isAgentThinkingExpanded();
+    if (!isExpanded) {
+      await helper.toggleAgentThinking();
+      await page.waitForTimeout(300);
+    }
+
+    // Get steps
+    const steps = await helper.getThinkingSteps();
+
+    // Should have agent_sub_answer messages from mock server
+    expect(steps.length).toBeGreaterThan(0);
+
+    // Check for expected agent thinking content from mock server
+    const stepsText = steps.join(' ');
+    expect(stepsText).toContain('Searching through available documents');
+    expect(stepsText).toContain('Found relevant information');
+  });
+
+  test('agent thinking extracts reasoning model thinking tags', async ({ page }) => {
+    const helper = new ChatbotHelper(page);
+
+    await page.goto('/lecc');
+    await helper.waitForChatbotReady();
+
+    // Send a message to trigger response with thinking tags
+    await helper.sendMessage('Test thinking tags');
+    await helper.waitForStreamingComplete(60000);
+
+    // Agent thinking should exist
+    const hasThinking = await helper.hasAgentThinking();
+    expect(hasThinking).toBe(true);
+
+    // Expand to see steps
+    const isExpanded = await helper.isAgentThinkingExpanded();
+    if (!isExpanded) {
+      await helper.toggleAgentThinking();
+      await page.waitForTimeout(300);
+    }
+
+    // Get steps
+    const steps = await helper.getThinkingSteps();
+
+    // Should include extracted thinking tag content
+    const stepsText = steps.join(' ');
+    expect(stepsText).toContain('Analyzing the question and documents');
+
+    // Get the actual message text
+    const messageText = await helper.getMessageText(1); // Assistant's response
+
+    // The thinking tags should NOT appear in the final message
+    expect(messageText).not.toContain('<thinking>');
+    expect(messageText).not.toContain('</thinking>');
+    expect(messageText).not.toContain('Analyzing the question and documents');
+
+    // But the actual answer should be there
+    expect(messageText).toContain('This is a test response');
+  });
 });

@@ -67,15 +67,8 @@ export function AgentThinking({ thinkingSteps, isStreaming }) {
 
   const [isExpanded, setIsExpanded] = useState(true);
 
-  useEffect(() => {
-    // Auto-collapse when streaming completes
-    if (!isStreaming && isExpanded) {
-      setIsExpanded(false);
-    }
-  }, [isStreaming, isExpanded]);
-
-  // Don't render if no thinking steps
-  if (thinkingSteps.length === 0) {
+  // Don't render if no thinking steps or if streaming is complete
+  if (thinkingSteps.length === 0 || !isStreaming) {
     return null;
   }
 
@@ -436,7 +429,7 @@ export function ChatMessageBubble(props) {
 
   return (
     <div>
-      <div className="comment">
+      <div className={`comment ${isUser ? 'comment--user' : 'comment--assistant'}`}>
         {isUser ? (
           <div className="circle user">
             <SVGIcon name={UserIcon} size="20" color="white" />

@@ -90,6 +90,26 @@ describe('AgentThinking', () => {
     expect(json).toMatchSnapshot();
   });
 
+  it('should not render when streaming is complete', () => {
+    const props = {
+      thinkingSteps: [
+        'Analyzing your query...',
+        'Searching documentation...',
+      ],
+      isStreaming: false,
+    };
+
+    const component = renderer.create(
+      <Provider store={store}>
+        <MemoryRouter>
+          <AgentThinking {...props} />
+        </MemoryRouter>
+      </Provider>,
+    );
+    const json = component.toJSON();
+    expect(json).toBeNull();
+  });
+
   it('should throw if thinkingSteps is not an array', () => {
     const props = {
       thinkingSteps: 'not an array',

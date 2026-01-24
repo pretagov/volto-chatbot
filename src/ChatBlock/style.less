@@ -48,6 +48,50 @@ mark {
   }
 }
 
+// Chat header with new chat button
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0 !important;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .new-chat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1.5px solid #d4d4d4;
+    border-radius: 8px;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 150ms ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+
+    &:hover {
+      background-color: #f5f5f5;
+      border-color: #a3a3a3;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    svg {
+      margin: 0;
+      color: @grey;
+    }
+  }
+}
+
 .chat-window {
   margin: 1.5em 0;
 
@@ -111,7 +155,7 @@ mark {
 
   .comment {
     display: flex;
-    margin-bottom: @marginBottom;
+    margin-bottom: 1em;
     gap: 0.8em;
 
     i.inverted.circular.grey.icon {
@@ -133,6 +177,23 @@ mark {
     .tool_info {
       padding-bottom: 0.2em;
       font-size: small;
+    }
+
+    // User messages - right aligned
+    &.comment--user {
+      flex-direction: row-reverse;
+
+      .circle {
+        order: 2;
+      }
+
+      & > div:not(.circle) {
+        text-align: right;
+
+        p {
+          text-align: right;
+        }
+      }
     }
 
     .agent-thinking {
@@ -204,7 +265,7 @@ mark {
     flex-direction: row;
     flex-wrap: wrap;
     margin-bottom: @marginBottom;
-    gap: 0.8em;
+    gap: 12px;
 
     @media only screen and (max-width: 800px) {
       display: inline-flex;
@@ -213,23 +274,34 @@ mark {
 
     .source-link {
       text-decoration: none !important;
+
+      &:focus {
+        outline: 2px solid @blue;
+        outline-offset: 2px;
+        border-radius: @borderRadius;
+      }
     }
 
     .source-link:hover {
       .source {
-        background-color: #f1f1f1;
+        background-color: #f5f5f5;
+        border-color: #d4d4d4;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
       }
     }
 
     .source {
       display: flex;
-      width: 200px;
-      height: 100%;
+      width: 220px;
+      min-height: 100px;
       flex-direction: column;
-      padding: 0.6em 0.7em;
-      border-radius: @borderRadius;
-      background-color: #f9f9f9;
-      gap: 0.3em;
+      padding: 12px 16px;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      background-color: #f5f5f5;
+      gap: 8px;
+      transition: all 200ms ease;
     }
 
     .source-header,
@@ -242,39 +314,43 @@ mark {
 
     .source-title {
       overflow: hidden;
-      width: 140px;
-      padding-left: 0.2em;
-      margin: 0 5px;
-      font-size: 13px;
+      flex: 1;
+      padding-left: 8px;
+      margin: 0 8px;
+      font-size: 14px;
       font-weight: 600;
       text-align: left;
       text-overflow: ellipsis;
       white-space: nowrap;
       word-break: break-all;
+      line-height: 1.25;
     }
 
     .chat-citation {
       &:hover {
-        border: 1px solid #dbd9d9;
-        background-color: #e6e7e8;
+        border-color: #d4d4d4;
+        background-color: #e5e5e5;
         color: @grey;
       }
     }
 
     .source-date span {
-      padding: 0.2em 0.4em;
-      border-radius: 5px;
-      background-color: #e5e7eb;
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background-color: #e5e5e5;
       color: @grey;
       font-size: 11px;
+      font-weight: 500;
     }
 
     .source-desc {
       display: -webkit-box;
       overflow: hidden;
       -webkit-box-orient: vertical;
-      color: @grey;
+      color: #525252;
       font-size: 12px;
+      line-height: 1.5;
       -webkit-line-clamp: 3;
       line-clamp: 3;
       text-align: left;
@@ -283,6 +359,14 @@ mark {
       strong {
         background-color: #fef3c7;
         font-weight: 600;
+        padding: 0 2px;
+        border-radius: 2px;
+      }
+
+      a {
+        color: @blue;
+        text-decoration: underline;
+        word-break: break-all;
       }
     }
   }
@@ -610,34 +694,137 @@ mark {
 }
 
 .chat-citation {
-  display: inline-block;
-  width: 1.8em;
-  height: 1.8em;
-  border: 1px solid #dbd9d9;
-  border-radius: 3em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75em;
+  height: 1.75em;
+  border: 1.5px solid @citationCircleColor;
+  border-radius: 9999px;
   background-color: @citationCircleColor;
   color: @grey;
   cursor: pointer;
   font-size: 11px;
-  font-weight: bold;
-  line-height: 1.8em;
+  font-weight: 600;
+  line-height: 1;
   text-align: center;
+  transition: all 150ms ease;
 
   &:hover {
-    border: 1px solid @citationCircleHoverColor;
+    border-color: @citationCircleHoverColor;
     background-color: @citationCircleHoverColor;
     color: #ffffff;
+    transform: scale(1.05);
+  }
+
+  &:focus {
+    outline: 2px solid @blue;
+    outline-offset: 2px;
   }
 }
 
 #chat-citation-popup {
   .ui.popup {
-    padding: 0.8em;
+    padding: 0;
     font-size: 13px;
+    max-width: 320px;
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+
+    &::before {
+      background-color: #1a1a1a !important;
+      border-color: #333 !important;
+    }
   }
 
   .ui.popup > .header {
-    font-size: 15px;
+    display: none;
+  }
+
+  .citation-popup-content {
+    padding: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+
+    .citation-popup-number {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: #444;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .citation-popup-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .citation-popup-header {
+      margin-bottom: 4px;
+
+      .citation-popup-title-link {
+        font-weight: 600;
+        font-size: 13px;
+        color: #fff;
+        text-decoration: none;
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        &:hover {
+          text-decoration: underline;
+        }
+      }
+
+      .citation-popup-title {
+        font-weight: 600;
+        font-size: 13px;
+        color: #fff;
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+
+    .citation-popup-url {
+      display: none;
+    }
+
+    .citation-popup-highlights {
+      p {
+        margin: 0;
+        font-size: 12px;
+        color: #999;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+
+        strong {
+          background-color: transparent;
+          color: #ccc;
+          font-weight: 600;
+        }
+      }
+    }
+
+    .citation-popup-no-content {
+      color: #666;
+      font-style: italic;
+      margin: 0;
+      font-size: 12px;
+    }
   }
 }
 

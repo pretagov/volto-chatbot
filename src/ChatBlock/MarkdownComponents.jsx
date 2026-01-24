@@ -9,7 +9,7 @@ import {
   Menu,
 } from 'semantic-ui-react';
 import { Citation } from './Citation';
-import { convertToPercentage, transformEmailsToLinks, SVGIcon } from './utils';
+import { convertToPercentage, transformEmailsToLinks, SVGIcon, getSourceDisplayName } from './utils';
 import { getSupportedBgColor, getSupportedTextColor } from './colors';
 
 import BotIcon from './../icons/bot.svg';
@@ -154,8 +154,8 @@ export function ClaimCitations(props) {
             setActiveTab(i);
           }}
         >
-          <span title={source?.semantic_identifier}>
-            {source?.semantic_identifier}
+          <span title={getSourceDisplayName(source)}>
+            {getSourceDisplayName(source)}
           </span>
         </Menu.Item>
       ),
@@ -170,13 +170,13 @@ export function ClaimCitations(props) {
                 className="claim-source-link"
               >
                 <h5 className="claim-source-title">
-                  {source.semantic_identifier}
+                  {getSourceDisplayName(source)}
                   <SVGIcon name={LinkIcon} size="20" />
                 </h5>
               </a>
             ) : (
               <h5 className="claim-source-title">
-                {source?.semantic_identifier}
+                {getSourceDisplayName(source)}
               </h5>
             )}
           </div>

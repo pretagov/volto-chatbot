@@ -1,5 +1,5 @@
 import { Popup } from 'semantic-ui-react';
-import { SVGIcon } from './utils';
+import { SVGIcon, getSourceDisplayName } from './utils';
 
 import FileIcon from './../icons/file.svg';
 import GlobeIcon from './../icons/globe.svg';
@@ -37,8 +37,8 @@ const SourceDetails_ = ({ source, index, luxon }) => {
     match_highlights,
     updated_at,
     source_type,
-    semantic_identifier = 'untitled document',
   } = source || {};
+  const displayName = getSourceDisplayName(source);
   const parsedDate = updated_at ? luxon.DateTime.fromISO(updated_at) : null;
   const relativeTime = parsedDate?.toRelative();
   const isLinkType = source_type === 'web';
@@ -58,8 +58,8 @@ const SourceDetails_ = ({ source, index, luxon }) => {
           ) : (
             <span className="chat-citation">{index}</span>
           )}
-          <div className="source-title" title={semantic_identifier}>
-            {semantic_identifier}
+          <div className="source-title" title={displayName}>
+            {displayName}
           </div>
           <Icon source_type={source_type} />
         </div>
@@ -85,9 +85,9 @@ const SourceDetails_ = ({ source, index, luxon }) => {
                     return value;
                   },
                   a: (props) => {
-                    const { node, ...rest } = props;
-                    const value = node.children?.[0]?.value || "";
-                    return value;
+                    const { node, href } = props;
+                    const value = node.children?.[0]?.value || href || "";
+                    return <a href={href} target="_blank" rel="noreferrer">{value}</a>;
                   },
                   h1: (props) => {
                     const { node, ...rest } = props;

@@ -256,6 +256,10 @@ class SubmitHandler {
     const _res = upsertToCompleteMessageMap(info);
     const { messageMap: frozenMessageMap, sessionId: frozenSessionId } = _res;
 
+    // Immediately show the user message
+    this.messageHistory = buildLatestMessageChain(frozenMessageMap);
+    this.completeMessageDetail = _res;
+
     // on initial message send, we insert a dummy system message
     // set this as the parent here if no parent is set
     if (!parentMessage && frozenMessageMap.size === 2) {
@@ -356,8 +360,30 @@ class SubmitHandler {
           // });
 
           if (Object.hasOwn(packet, 'answer_piece')) {
-            answer += packet.answer_piece;
+            // Check if this is agent thinking or the actual answer
+            if (packet.answer_type === 'agent_sub_answer') {
+              console.log('[AGENT THINKING] agent_sub_answer:', packet.answer_piece);
+              agentThinking.push(packet.answer_piece);
+            } else {
+              // Extract thinking tags from reasoning models (<think> or <thinking>)
+              const thinkingRegex = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi;
+              let piece = packet.answer_piece;
+              let match;
+
+              while ((match = thinkingRegex.exec(packet.answer_piece)) !== null) {
+                console.log('[AGENT THINKING] thinking tag:', match[1].trim());
+                agentThinking.push(match[1].trim());
+                // Remove the thinking tags from the answer piece
+                piece = piece.replace(match[0], '');
+              }
+
+              // Add the remaining content (without thinking tags) to the answer
+              if (piece.trim()) {
+                answer += piece;
+              }
+            }
           } else if (Object.hasOwn(packet, 'agent_piece')) {
+            console.log('[AGENT THINKING] agent_piece:', packet.agent_piece);
             agentThinking.push(packet.agent_piece);
           } else if (Object.hasOwn(packet, 'top_documents')) {
             documents = packet.top_documents;
@@ -418,7 +444,10 @@ class SubmitHandler {
               citations: finalMessage?.citations || {},
               files: finalMessage?.files || aiMessageImages || [],
               toolCalls: finalMessage?.tool_calls || toolCalls,
-              agentThinking: agentThinking,
+              agentThinking: (() => {
+                console.log('[AGENT THINKING] Setting agentThinking:', agentThinking.length, 'steps');
+                return agentThinking;
+              })(),
               parentMessageId: newUserMessageId,
               alternateAssistantID: null, // alternativeAssistant?.id,
             },
@@ -508,6 +537,13 @@ export function useBackendChat({
   const [chatState, setChatState] = React.useState(ChatState.AWAITING_START);
   const [messageHistory, setMessageHistory] = React.useState([]);
   const [messageToSubmit, setMessageToSubmit] = React.useState(null);
+  const [lastSubmittedMessage, setLastSubmittedMessage] = React.useState('');
+
+  // Ref to track actual current state for async operations
+  const chatStateRef = React.useRef(chatState);
+  React.useEffect(() => {
+    chatStateRef.current = chatState;
+  }, [chatState]);
 
   const rewakeDelayInMs =
     config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
@@ -546,8 +582,10 @@ export function useBackendChat({
     try {
       const wakeResult = await wakeApi();
       if (!!wakeResult) {
-        // We want to make sure we know when we're in a submitting and awake state vs just being ready to accept submission
-        if (currentChatState !== ChatState.SUBMITTING) {
+        // Check the ACTUAL current state via ref, not the stale parameter
+        // This prevents setting state to READY if user submitted while wake was in progress
+        const actualCurrentState = chatStateRef.current;
+        if (actualCurrentState !== ChatState.SUBMITTING && actualCurrentState !== ChatState.STREAMING) {
           setChatState(ChatState.READY);
         }
         localStorage.setItem("chat-last-awake", Date.now());
@@ -615,6 +653,7 @@ export function useBackendChat({
       setError(null);
       setChatState(ChatState.SUBMITTING);
       setMessageToSubmit(input);
+      setLastSubmittedMessage(input.message || '');
     },
     [chatState],
   );
@@ -628,16 +667,35 @@ export function useBackendChat({
 
     const onSubmit = submitHandler.current?.onSubmit;
 
-    try {
-      onSubmit(messageToSubmit);
-    } catch (errorReason) {
-      setChatState(ChatState.ERRORED);
-      setError(
-        errorReason instanceof Error ? errorReason.message : errorReason,
-      );
+    // Ensure backend is awake before submitting
+    async function submitWithWake() {
+      try {
+        // Always call wakeApi directly to ensure backend is healthy before submitting
+        const isAwake = await wakeApi();
+        if (!isAwake) {
+          setError("Failed to connect to the chat backend. Please try again.");
+          return;
+        }
+        localStorage.setItem("chat-last-awake", Date.now());
+        await onSubmit(messageToSubmit);
+      } catch (errorReason) {
+        setChatState(ChatState.ERRORED);
+        setError(
+          errorReason instanceof Error ? errorReason.message : errorReason,
+        );
+      }
     }
+
+    submitWithWake();
     setMessageToSubmit(null);
-  }, [messageToSubmit, chatState, wake]);
+  }, [messageToSubmit, chatState]);
+
+  // Clear the last submitted message when we start streaming (success)
+  React.useEffect(() => {
+    if (chatState === ChatState.STREAMING) {
+      setLastSubmittedMessage('');
+    }
+  }, [chatState]);
 
   return {
     messages: messageHistory,
@@ -646,5 +704,7 @@ export function useBackendChat({
     error,
     clearChat,
     wake,
+    lastSubmittedMessage,
+    clearLastSubmittedMessage: () => setLastSubmittedMessage(''),
   };
 }
