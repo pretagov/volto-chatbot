@@ -122,6 +122,8 @@ class SubmitHandler {
     qgenAsistantId,
     enableQgen,
     setError,
+    setLatestAgentStep,
+    setDocumentCount,
     signal,
   }) {
     this.persona = persona;
@@ -131,6 +133,8 @@ class SubmitHandler {
     this.qgenAsistantId = qgenAsistantId;
     this.enableQgen = enableQgen;
     this.setError = setError;
+    this.setLatestAgentStep = setLatestAgentStep;
+    this.setDocumentCount = setDocumentCount;
 
     this.onSubmit = this.onSubmit.bind(this);
     this.abortSignal = signal || null;
@@ -270,6 +274,8 @@ class SubmitHandler {
     const currentAssistantId = this.persona;
 
     this.setChatState(ChatState.STREAMING);
+    this.setLatestAgentStep(null);  // Clear previous agent step
+    this.setDocumentCount(0);  // Clear previous document count
 
     let answer = '';
     let agentThinking = [];
@@ -364,6 +370,7 @@ class SubmitHandler {
             if (packet.answer_type === 'agent_sub_answer') {
               console.log('[AGENT THINKING] agent_sub_answer:', packet.answer_piece);
               agentThinking.push(packet.answer_piece);
+              this.setLatestAgentStep(packet.answer_piece);  // Update status immediately
             } else {
               // Extract thinking tags from reasoning models (<think> or <thinking>)
               const thinkingRegex = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi;
@@ -385,6 +392,7 @@ class SubmitHandler {
           } else if (Object.hasOwn(packet, 'agent_piece')) {
             console.log('[AGENT THINKING] agent_piece:', packet.agent_piece);
             agentThinking.push(packet.agent_piece);
+            this.setLatestAgentStep(packet.agent_piece);  // Update status immediately
           } else if (Object.hasOwn(packet, 'top_documents')) {
             documents = packet.top_documents;
             query = packet.rephrased_query;
@@ -393,6 +401,7 @@ class SubmitHandler {
               // point to the latest message (we don't know the messageId yet, which is why
               // we have to use -1)
               // setSelectedMessageForDocDisplay(TEMP_USER_MESSAGE_ID);
+              this.setDocumentCount(documents.length);  // Update document count for status
             }
           } else if (Object.hasOwn(packet, 'tool_name')) {
             toolCalls = [
@@ -538,6 +547,9 @@ export function useBackendChat({
   const [messageHistory, setMessageHistory] = React.useState([]);
   const [messageToSubmit, setMessageToSubmit] = React.useState(null);
   const [lastSubmittedMessage, setLastSubmittedMessage] = React.useState('');
+  const [latestAgentStep, setLatestAgentStep] = React.useState(null);
+  const [documentCount, setDocumentCount] = React.useState(0);
+  const [isWaking, setIsWaking] = React.useState(false);
 
   // Ref to track actual current state for async operations
   const chatStateRef = React.useRef(chatState);
@@ -625,6 +637,8 @@ export function useBackendChat({
       persona,
       setChatState,
       setError,
+      setLatestAgentStep,
+      setDocumentCount,
       qgenAsistantId,
       enableQgen,
       onMessageHistoryChange: setMessageHistory
@@ -671,7 +685,9 @@ export function useBackendChat({
     async function submitWithWake() {
       try {
         // Always call wakeApi directly to ensure backend is healthy before submitting
+        setIsWaking(true);
         const isAwake = await wakeApi();
+        setIsWaking(false);
         if (!isAwake) {
           setError("Failed to connect to the chat backend. Please try again.");
           return;
@@ -679,6 +695,7 @@ export function useBackendChat({
         localStorage.setItem("chat-last-awake", Date.now());
         await onSubmit(messageToSubmit);
       } catch (errorReason) {
+        setIsWaking(false);
         setChatState(ChatState.ERRORED);
         setError(
           errorReason instanceof Error ? errorReason.message : errorReason,
@@ -691,9 +708,14 @@ export function useBackendChat({
   }, [messageToSubmit, chatState]);
 
   // Clear the last submitted message when we start streaming (success)
+  // Clear latestAgentStep and documentCount when done streaming (READY state)
   React.useEffect(() => {
     if (chatState === ChatState.STREAMING) {
       setLastSubmittedMessage('');
+    }
+    if (chatState === ChatState.READY) {
+      setLatestAgentStep(null);
+      setDocumentCount(0);
     }
   }, [chatState]);
 
@@ -706,5 +728,8 @@ export function useBackendChat({
     wake,
     lastSubmittedMessage,
     clearLastSubmittedMessage: () => setLastSubmittedMessage(''),
+    latestAgentStep,
+    documentCount,
+    isWaking,
   };
 }

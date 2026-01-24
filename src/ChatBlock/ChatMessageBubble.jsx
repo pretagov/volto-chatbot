@@ -21,6 +21,7 @@ import GlassesIcon from './../icons/glasses.svg';
 
 import { sourcesForSelectedMessage } from "#stores/sidebarStore";
 import LinkIcon from "@plone/volto/icons/link.svg";
+import SearchIcon from "@plone/volto/icons/zoom.svg";
 
 const CITATION_MATCH = /\[\d+\](?![[(\])])/gm;
 
@@ -44,12 +45,36 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export function ToolCall({ tool_args, tool_name }) {
-  // , tool_result
+export function ToolCall({ tool_args, tool_name, thinkingSteps = [] }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (tool_name === 'run_search') {
+    const hasSteps = thinkingSteps.length > 0;
     return (
       <div className="tool_info">
-        Searched for: <em>{tool_args?.query || ''}</em>
+        <span>Searched for: <em>{tool_args?.query || ''}</em></span>
+        {hasSteps && (
+          <>
+            <button
+              className="steps-toggle"
+              onClick={() => setIsExpanded(!isExpanded)}
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? 'Hide steps' : 'Show steps'}
+              aria-controls="search-steps-content"
+            >
+              <Icon name={isExpanded ? 'chevron up' : 'chevron down'} size="small" />
+            </button>
+            {isExpanded && (
+              <div id="search-steps-content" className="search-steps">
+                {thinkingSteps.map((step, idx) => (
+                  <div key={idx} className="search-step">
+                    {step}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     );
   }
@@ -107,6 +132,36 @@ export function AgentThinking({ thinkingSteps, isStreaming }) {
 AgentThinking.propTypes = {
   thinkingSteps: PropTypes.array.isRequired,
   isStreaming: PropTypes.bool.isRequired,
+};
+
+function getStatusText(agentStep, documentCount, isWaking) {
+  if (isWaking) return "Warming up...";
+  if (agentStep) return agentStep;
+  if (documentCount > 0) return `Generating response from ${documentCount} documents...`;
+  // "Thinking..." until we get the query from the response
+  return "Thinking...";
+}
+
+export function PendingResponseBubble({ latestAgentStep, documentCount, isWaking }) {
+  const statusText = getStatusText(latestAgentStep, documentCount, isWaking);
+
+  return (
+    <div className="comment comment--assistant">
+      <div className="circle assistant" aria-hidden="true">
+        <SVGIcon name={BotIcon} size="20" color="white" />
+      </div>
+      <div className="message-status">
+        <SVGIcon name={SearchIcon} size="16" />
+        <span>{statusText}</span>
+      </div>
+    </div>
+  );
+}
+
+PendingResponseBubble.propTypes = {
+  latestAgentStep: PropTypes.string,
+  documentCount: PropTypes.number,
+  isWaking: PropTypes.bool,
 };
 
 function addQualityMarkersPlugin() {
@@ -285,7 +340,7 @@ export function ChatMessageBubble(props) {
   const {
     message,
     isLoading,
-    // isMostRecent,
+    isMostRecent,
     libs,
     onChoice,
     showToolCalls,
@@ -302,6 +357,9 @@ export function ChatMessageBubble(props) {
     enableMatomoTracking,
     persona,
     blockData,
+    latestAgentStep,
+    documentCount,
+    isWaking,
   } = props;
   const { remarkGfm } = libs; // , rehypePrism
   const { citations = {}, documents = [], type } = message;
@@ -440,17 +498,31 @@ export function ChatMessageBubble(props) {
           </div>
         )}
         <div>
-          {showToolCalls &&
-            message.toolCalls?.map((info, index) => (
-              <ToolCall key={index} {...info} />
-            ))}
+          {/* Show status when this is the most recent assistant message and still loading */}
+          {!isUser && isMostRecent && isLoading && (() => {
+            const searchQuery = message.query || message.toolCalls?.[0]?.tool_args?.query;
+            const statusText = isWaking
+              ? 'Warming up...'
+              : latestAgentStep
+                ? latestAgentStep
+                : documentCount > 0
+                  ? `Generating response from ${documentCount} documents...`
+                  : searchQuery
+                    ? `Searching for: ${searchQuery}`
+                    : 'Thinking...';
+            return (
+              <div className="message-status">
+                <SVGIcon name={SearchIcon} size="16" />
+                <span>{statusText}</span>
+              </div>
+            );
+          })()}
 
-          {!isUser && message.agentThinking && message.agentThinking.length > 0 && (
-            <AgentThinking
-              thinkingSteps={message.agentThinking}
-              isStreaming={isLoading}
-            />
-          )}
+          {/* Hide tool calls while loading - status replaces "Searched for:" */}
+          {showToolCalls && !(isMostRecent && isLoading) &&
+            message.toolCalls?.map((info, index) => (
+              <ToolCall key={index} {...info} thinkingSteps={message.agentThinking} />
+            ))}
 
           {Object.keys(documents).length > 0 &&
             blockData.displayMode === 'sidebar' && (

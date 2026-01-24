@@ -4,7 +4,7 @@ import React from "react";
 import { Checkbox, Form, Popup } from "semantic-ui-react";
 
 import AutoResizeTextarea from "./AutoResizeTextarea";
-import { ChatMessageBubble } from "./ChatMessageBubble";
+import { ChatMessageBubble, PendingResponseBubble } from "./ChatMessageBubble";
 import EmptyState from "./EmptyState";
 import { useScrollonStream } from "./lib";
 import { useBackendChat, ChatState } from './useBackendChat';
@@ -55,6 +55,9 @@ function ChatWindow({
     wake,
     lastSubmittedMessage,
     clearLastSubmittedMessage,
+    latestAgentStep,
+    documentCount,
+    isWaking,
   } = useBackendChat({
     persona: data.assistant,
     qgenAsistantId,
@@ -127,6 +130,14 @@ function ChatWindow({
   return (
     <div className="chat-window">
       <div className="messages">
+        {/* Show pending status on landing page only after user submits (not during background wake on focus) */}
+        {showLandingPage && chatState === ChatState.SUBMITTING && (
+          <PendingResponseBubble
+            latestAgentStep={latestAgentStep}
+            documentCount={documentCount}
+            isWaking={isWaking}
+          />
+        )}
         {showLandingPage ? (
           <>
             {persona && showAssistantDescription && (
@@ -157,7 +168,7 @@ function ChatWindow({
                 <ChatMessageBubble
                   key={m.messageId}
                   message={m}
-                  isMostRecent={index === 0}
+                  isMostRecent={index === messages.length - 1}
                   isLoading={isStreaming}
                   enableFeedback={enableFeedback}
                   feedbackReasons={feedbackReasons}
@@ -177,15 +188,23 @@ function ChatWindow({
                   enableMatomoTracking={enableMatomoTracking}
                   persona={persona}
                   blockData={data}
+                  latestAgentStep={latestAgentStep}
+                  documentCount={documentCount}
+                  isWaking={isWaking}
                 />
               ))}
+              {/* Show pending response bubble when waiting and no assistant message exists yet */}
+              {[ChatState.SUBMITTING, ChatState.STREAMING].includes(chatState) &&
+                (messages.length === 0 || messages[messages.length - 1]?.type === 'user') && (
+                <PendingResponseBubble
+                  latestAgentStep={latestAgentStep}
+                  documentCount={documentCount}
+                  isWaking={isWaking}
+                />
+              )}
               <div ref={endDivRef} /> {/* End div to mark the bottom */}
             </div>
           </>
-        )}
-        {/* TODO: Only show this if it's taking a while to prevent flashing. Could cause WCAG SC 2.3.1 failure. */}
-        {[ChatState.STREAMING, ChatState.SUBMITTING].includes(chatState) && (
-          <div className="loader" />
         )}
       </div>
 
