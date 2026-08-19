@@ -157,4 +157,27 @@ describe('forwardToOnyx', () => {
     const upstream = { headers: { get: () => 'chunked' }, body };
     await expect(forwardToOnyx(upstream, res, {})).rejects.toThrow(/upstream died/);
   });
+
+  it('accepts a Web ReadableStream, which is what global fetch actually returns', async () => {
+    // undici's response body has no .pipe or .on. The add-on this was ported from
+    // used node-fetch, whose body is a Node stream, so piping it directly works
+    // in a test with Readable.from and breaks against a real response.
+    const { res, chunks } = collectingResponse();
+    const web = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('web-'));
+        controller.enqueue(new TextEncoder().encode('stream'));
+        controller.close();
+      },
+    });
+    const upstream = { headers: { get: () => 'chunked' }, body: web };
+    await forwardToOnyx(upstream, res, {});
+    expect(chunks.join('')).toBe('web-stream');
+  });
+
+  it('rejects when the upstream has no body at all', async () => {
+    const { res } = collectingResponse();
+    await expect(forwardToOnyx({ headers: { get: () => null }, body: null }, res, {}))
+      .rejects.toThrow(/no body/);
+  });
 });

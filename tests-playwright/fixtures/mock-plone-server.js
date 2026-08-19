@@ -29,6 +29,11 @@ const AUTH_TOKEN = `${header}.${payload}.${signature}`;
 app.use(cors());
 app.use(express.json());
 
+// Onyx routes now live in mock-onyx-server.js so the widget suite can use them
+// without Plone.
+const { createOnyxMock } = require('./mock-onyx-server');
+app.use(createOnyxMock());
+
 // Virtual Host Monster path rewriting middleware
 // Volto's proxy adds VHM paths like: /VirtualHostBase/http/localhost:8080/++api++/VirtualHostRoot/@login
 // And also sends requests with ++api++ prefix like: /++api++/@site
@@ -78,98 +83,12 @@ if (process.env.DEBUG) {
  */
 
 // Mock Danswer authentication endpoint (called by Volto middleware)
-app.post('/api/auth/login', (req, res) => {
-  // Return a mock cookie for authentication
-  res.set('Set-Cookie', 'fastapiusersauth=mock-auth-token; Path=/; Max-Age=3600; HttpOnly; SameSite=lax');
-  res.json({ success: true });
-});
 
 // Mock persona endpoint (for credential check)
-app.get('/api/persona/-1', (req, res) => {
-  res.json({ id: -1, name: 'Test Persona' });
-});
 
 // Mock chat session creation
-app.post('/api/chat/create-chat-session', (req, res) => {
-  const chatSessionId = `test-session-${Date.now()}`;
-  res.json({
-    chat_session_id: chatSessionId,
-  });
-});
 
 // Mock streaming chat response
-app.post('/api/chat/send-message', (req, res) => {
-  const { message } = req.body;
-
-  // Set headers for streaming response
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Transfer-Encoding', 'chunked');
-
-  // Generate message IDs
-  const userMessageId = Math.floor(Math.random() * 10000);
-  const assistantMessageId = userMessageId + 1;
-
-  // Stream response chunks
-  const chunks = [
-    // Message IDs
-    { user_message_id: userMessageId, reserved_assistant_message_id: assistantMessageId },
-
-    // Agent thinking (tool call)
-    { tool_name: 'run_search', tool_args: { query: message } },
-
-    // Agent sub-answer thinking steps (like Danswer's agent thinking)
-    {
-      level: null,
-      level_question_num: null,
-      answer_piece: 'Searching through available documents',
-      answer_type: 'agent_sub_answer'
-    },
-    {
-      level: null,
-      level_question_num: null,
-      answer_piece: 'Found relevant information in 1 document',
-      answer_type: 'agent_sub_answer'
-    },
-
-    // Search results
-    {
-      level: null,
-      level_question_num: null,
-      top_documents: [
-        {
-          document_id: 'test-doc-1',
-          semantic_identifier: 'Test Document',
-          link: 'https://example.com/test',
-          blurb: 'This is a test document for the chatbot.',
-          score: 0.95,
-        },
-      ],
-    },
-
-    // Answer chunks - include reasoning model thinking tags and regular content
-    { answer_piece: '<thinking>Analyzing the question and documents to formulate a response.</thinking>' },
-    ...`This is a test response to your question: "${message}". The chatbot is working correctly in test mode.`
-      .split(' ')
-      .map((word) => ({ answer_piece: word + ' ' })),
-
-    // Final message
-    { message_id: assistantMessageId },
-  ];
-
-  // Send chunks with small delays to simulate streaming
-  let index = 0;
-  const sendChunk = () => {
-    if (index < chunks.length) {
-      res.write(JSON.stringify(chunks[index]) + '\n');
-      index++;
-      setTimeout(sendChunk, 50); // 50ms delay between chunks
-    } else {
-      res.end();
-    }
-  };
-
-  sendChunk();
-});
 
 /**
  * No authentication required for test mock server

@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 // The security-critical module. Two properties matter: only allowlisted Onyx
 // paths are reachable, and tenant-scoped fields come from the tenant record
 // rather than from the client.
@@ -42,6 +44,16 @@ export function pinTenantFields(body, tenant) {
   };
 }
 
+// Global fetch (undici) returns a Web ReadableStream, which has no .pipe or .on.
+// The add-on this was ported from used node-fetch, whose body is a Node stream,
+// so the ported pipe call breaks against a real response even though it works
+// against a Readable in a test. Normalise here rather than at every call site.
+function toNodeStream(body) {
+  if (!body) throw new Error('upstream response has no body');
+  if (typeof body.pipe === 'function') return body;
+  return Readable.fromWeb(body);
+}
+
 // Streaming must stay incremental — the widget renders tokens as they arrive, so
 // buffering the whole answer here would make every reply appear at once.
 export async function forwardToOnyx(upstream, res, { apiKey } = {}) {
@@ -53,9 +65,10 @@ export async function forwardToOnyx(upstream, res, { apiKey } = {}) {
     res.set('Content-Type', 'application/json');
   }
 
+  const body = toNodeStream(upstream.body);
   await new Promise((resolve, reject) => {
-    upstream.body.on('error', reject);
-    upstream.body.on('end', resolve);
-    upstream.body.pipe(res);
+    body.on('error', reject);
+    body.on('end', resolve);
+    body.pipe(res);
   });
 }
