@@ -193,7 +193,7 @@ The tenant key sits in a public script tag. It is not a secret and cannot be
 treated as one.
 
 **Where the origin check actually happens.** The widget is served from our
-origin, so requests from it to `/da/*` are same-origin and carry *our* `Origin`
+origin, so requests from it to `/_da/*` are same-origin and carry *our* `Origin`
 header — an origin allowlist on those calls would always pass and is worthless.
 The embedding site's origin is only observable on the `GET /w/<tenant>` document
 request, via `Sec-Fetch-Site` and `Referer`, and enforceable through
