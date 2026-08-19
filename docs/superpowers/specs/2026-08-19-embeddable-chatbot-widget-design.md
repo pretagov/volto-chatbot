@@ -71,21 +71,35 @@ so it can be restructured freely.
 
 ### The alias surface
 
-`src/ChatBlock/` imports eight distinct `@plone/*` specifiers. Each needs a
-decision, and two are not trivial:
+Eight distinct `@plone/*` specifiers appear in `src/ChatBlock/`, but two are
+reached only through files the widget never imports, so **six need aliases**:
 
 | Specifier | Approach |
 | --- | --- |
-| `@plone/volto/icons/code.svg`, `icons/zoom.svg` | Local SVG files. Trivial. |
+| `@plone/volto/icons/zoom.svg` | Local SVG file. Trivial. |
 | `@plone/volto/helpers/Loadable/Loadable` and `@plone/volto/helpers/Loadable` | Both paths are used and both need aliases. `injectLazyLibs` is Volto's loadable-library HOC wired to `config.settings.loadables`, which this add-on populates with `rehypePrism`, `remarkGfm` and `luxon`. Reimplement as a small HOC that resolves those three through dynamic import; do not vendor Volto's loadable machinery. |
 | `@plone/volto/helpers` (`usePrevious`) | Reimplement — a few lines. |
-| `@plone/registry` | Shim the lookup used, rather than depending on the package. |
+| `@plone/registry` | A **writable settings singleton** the widget shell seeds at boot — see below. |
 | `@plone/volto-slate/editor/render` (`serializeNodes`) | Renders Slate JSON to React. The largest shim. Depend on `@plone/volto-slate` directly if it installs standalone; otherwise a minimal renderer covering the node types the config fields actually use. Resolve this early — it gates the build. |
-| `@plone/volto/components` (`BlockDataForm`, `SidebarPortal`) | **No shim needed.** Only `ChatBlockEdit.jsx` imports these, and that file is editor-only and outside the widget's import graph. |
+| `@plone/volto/components` (`BlockDataForm`, `SidebarPortal`) | **No shim needed** — only `ChatBlockEdit.jsx` imports these. |
+| `@plone/volto/icons/code.svg` | **No shim needed** — only `src/ChatBlock/index.js` imports it. |
 
 The widget imports the view path: `ChatWindow`, `ChatMessageBubble`, `Citation`,
 `CompactSourceCard`, the agent thinking display and their dependencies. It does
-not import `ChatBlockEdit.jsx` or the block schema.
+**not** import `ChatBlockEdit.jsx` (editor-only) or `src/ChatBlock/index.js`
+(Volto block registration, which pulls in the editor and the block schema).
+
+### The registry is a second config channel
+
+`@plone/registry` is not just an import to satisfy. `lib.js` reads
+`config.settings["volto-chatbot"].rewakeUrl` and `useBackendChat.js` reads
+`.rewakeDelay` — runtime settings taken from a module singleton rather than from
+props. So "components take identical config regardless of host" holds only if the
+widget shell **seeds the shimmed registry** at boot with a `volto-chatbot`
+settings object containing at least `rewakeUrl` and `rewakeDelay`.
+
+This is a second config channel alongside the shared contract, and the contract
+definition must cover it rather than leaving those two keys undefined.
 
 ## Architecture
 
@@ -109,12 +123,23 @@ upstream's presentational components, reused unchanged.
 - `GET /w/<tenant>` — the widget document. The embedding-origin check happens
   here (see Trust model).
 - `GET /w/<tenant>/config` — the tenant's config, in the shared contract shape.
-- `POST /da/*` — Onyx proxy with streaming passthrough, ported from `middleware.js`.
-- `POST /ha/*` — HallOumi grounding, ported from `halloumi/middleware.js`.
+- `ALL /_da/*` — Onyx proxy with streaming passthrough, ported from `middleware.js`.
+- `ALL /_ha/*` — HallOumi grounding, ported from `halloumi/middleware.js`.
 
-The `_da`/`_ha` prefixes are kept from the existing add-on deliberately: the mock
-server and the Volto proxy already use them, and a generic `/api/*` on our origin
-would read confusingly next to Onyx's own `/api/...` paths that the proxy targets.
+**These paths are not a choice.** The reused components hardcode them:
+`src/ChatBlock/lib.js` fetches `/_da/chat/send-message`,
+`/_da/chat/create-chat-session` and `/_da/chat/create-chat-message-feedback`;
+`useQualityMarkers.js` fetches `/_ha/generate`. Reusing those files unmodified
+requires serving exactly those paths, underscore included — which is also what
+the Volto add-on and the existing mock server already use.
+
+The routes accept any method rather than POST only, because `lib.js` also issues
+a **GET** health ping to `config.settings["volto-chatbot"].rewakeUrl`, defaulted
+by the add-on to `/_da/health` and fired on a timer by `useBackendChat.js`.
+
+The proxied Onyx path allowlist is therefore exactly: `chat/send-message`,
+`chat/create-chat-session`, `chat/create-chat-message-feedback`, `health`, and
+`persona/-1` (the credential check). Anything else is refused.
 
 Tenant config lives in a Postgres table. No admin UI in v1; seed through a
 migration and add one later if it earns its place.
@@ -128,6 +153,7 @@ volto-chatbot/
     sidebar/                # ours — the Volto shell
     index.js                # fork-modified — registers SidebarEntrypoint via appExtras
     middleware.js           # upstream — stays, see below
+    halloumi/middleware.js  # upstream — stays, serves the _ha route
   widget/                   # new — standalone embeddable
     src/loader/             #   loader.js
     src/app/                #   entrypoint, config provider, panel shell
@@ -152,13 +178,14 @@ hosted service is a later migration, not a v1 decision.
 fetches `/w/<tenant>/config` → launcher renders. A failed config fetch renders
 nothing rather than a broken bubble.
 
-**A chat turn.** The widget POSTs same-origin to `/da/chat` carrying its session
-token → the middleware validates the token, applies rate and spend limits,
-overrides tenant-scoped fields from the tenant record, attaches the cached Onyx
+**A chat turn.** The widget POSTs same-origin to `/_da/chat/send-message`, the
+shell's `fetch` wrapper attaching the session token → the middleware validates
+the token, meters the turn, applies rate and spend limits, overrides
+tenant-scoped fields from the tenant record, attaches the cached Onyx
 service-account cookie, and proxies to Onyx (`/api/chat/send-message`) → the
 response streams back unbuffered → the widget renders tokens, agent thinking,
-then citations and highlights. Grounding runs through `/ha/*` and updates the
-answer's support state.
+then citations and highlights. Grounding runs through `/_ha/generate` and updates
+the answer's support state.
 
 ## Trust model
 
@@ -174,13 +201,34 @@ request, via `Sec-Fetch-Site` and `Referer`, and enforceable through
 
 - `GET /w/<tenant>` checks the embedding origin against the tenant's allowlist
   and sets `frame-ancestors` accordingly.
-- On success it mints a **short-lived, tenant-bound session token**, which the
-  widget must present on every `/da/*` and `/ha/*` call.
+- On success it mints a **tenant-bound session token**, which the widget presents
+  on every `/_da/*` and `/_ha/*` call.
 - Those calls validate the token, not an origin.
 
-This stops casual re-embedding — someone dropping the key on their own site in a
-browser. It does **not** stop determined abuse: a server-side client can send any
-headers it likes. Browser-enforced controls only bind browsers.
+**How the token gets attached, given components we cannot edit.** `lib.js` and
+`useQualityMarkers.js` issue bare `fetch()` calls with no hook for a header, and
+editing them would break the merge strategy. Two mechanisms were considered:
+
+- *A cookie* set on the `/w/<tenant>` response. Rejected: the widget runs in an
+  iframe on someone else's site, so this is a **third-party cookie** — blocked
+  outright by Safari and being removed in Chrome. It would fail on exactly the
+  embedded case the product exists for.
+- *A `fetch` wrapper installed by the widget shell* — chosen. The shell patches
+  `window.fetch` inside the iframe at boot to attach the token to same-origin
+  `/_da/*` and `/_ha/*` requests. It is shell code in a new file, needs no
+  upstream edit, and is unaffected by cookie policy.
+
+**What the origin check is actually worth.** `Sec-Fetch-Site` reports only
+`same-site`/`cross-site` — never *which* site — so the check rests on `Referer`,
+which an embedding page can suppress with `Referrer-Policy: no-referrer`. When
+`Referer` is absent we **serve the widget anyway** rather than break legitimate
+tenants, which means the header check is advisory. `frame-ancestors` is the
+control that still holds in that case, so it is load-bearing rather than
+defence-in-depth.
+
+Together these stop casual re-embedding — someone dropping the key on their own
+site in a browser. They do **not** stop determined abuse: a server-side client
+can send any headers it likes. Browser-enforced controls only bind browsers.
 
 **Pinning the tenant.** The proxy must not be a general-purpose authenticated
 tunnel into Onyx:
@@ -192,8 +240,14 @@ tunnel into Onyx:
   receives `persona` from block data); proxying it unchanged would let a caller
   point one tenant's endpoint at another tenant's assistant.
 
-**Cost control is the real defence.** Metering is per **completed chat turn**,
-counted in Redis (already deployed) under a per-tenant key with a UTC daily
+**Cost control is the real defence.** Metering happens at **turn admission** —
+the counter increments before the request is proxied and is never refunded if the
+stream aborts. Metering on completion would be gameable in exactly the direction
+the cap exists to prevent: inference is billed as tokens are produced, so a
+client that aborts every stream just before the end would spend without ever
+being counted.
+
+Counters live in Redis (already deployed): a per-tenant key on a UTC daily
 window, plus a per-IP limit over a short rolling window. The client IP comes from
 Fly's `Fly-Client-IP` header, which is the only forwarded header we trust. The
 per-tenant daily cap is a **required** field on the tenant record. If Redis is
@@ -215,6 +269,16 @@ inference provider is a policy decision, not a technical one.
 - Rate limited or over cap — an explicit message, so a site owner can tell "over
   quota" from "broken".
 - Config unavailable — no launcher.
+- **Session token expired** — the panel is designed to live on a page
+  indefinitely, so the token will outlive its lifetime on an SPA host that never
+  navigates. On a `401` the shell's `fetch` wrapper silently re-mints against
+  `GET /w/<tenant>/session` and retries the request **once**; a second failure
+  surfaces as an error rather than looping.
+- **Storage unavailable** — browsers partition (and can block) storage in
+  third-party iframes, so session persistence is best-effort. If the session id
+  cannot be read or written the widget starts a fresh conversation rather than
+  failing. Partitioning per top-level site is desirable here anyway: it keeps one
+  visitor's conversations on different tenants separate.
 
 ## Testing
 
@@ -223,9 +287,13 @@ Testing concentrates on the new boundaries, where the risk is.
 **Middleware**, which holds the security properties:
 
 - `GET /w/<tenant>` accepts an allowlisted embedding origin and rejects others
-- a `/da/*` call without a valid session token is rejected
+- a missing `Referer` still serves the widget (advisory check), while
+  `frame-ancestors` is set from the tenant's allowlist
+- a `/_da/*` call without a valid session token is rejected
 - a client-supplied assistant id is ignored in favour of the tenant record's
-- a non-allowlisted Onyx path is refused
+- a non-allowlisted Onyx path is refused, and the five allowlisted ones pass
+- a turn is metered at admission and **not** refunded when the client aborts
+  the stream early
 - rate limit and spend cap fail closed, including when Redis is unavailable
 - the Onyx service cookie never appears in a client response
 - streaming is incremental rather than buffered
@@ -238,7 +306,8 @@ Testing concentrates on the new boundaries, where the risk is.
 
 **Widget shell:** a failed config fetch renders no launcher; config drives starter
 prompts, title and theme; a stored session id resumes the conversation after a
-simulated navigation.
+simulated navigation; the `fetch` wrapper attaches the token to `/_da/*` and
+`/_ha/*` but not to other requests, and re-mints once on a `401`.
 
 **Reused components.** `src/ChatBlock/` has tests for eight modules, but several
 on the widget's critical path have none — `ChatWindow.jsx`, `useBackendChat.js`,
@@ -276,5 +345,11 @@ and a config admin UI.
 Two existing block fields are out of scope and are therefore **absent from the
 tenant config schema**, with their features hard-disabled in the widget shell
 rather than left to default: `qgenAsistantId` (question generation) and
-`enableMatomoTracking`. The remaining block fields map onto the tenant record as
-part of defining the shared config contract.
+`enableMatomoTracking`.
+
+The remaining block fields map onto the tenant record as part of defining the
+shared config contract. That mapping is the first implementation task and lands
+as a schema module in `middleware/`, imported by the widget shell for typing and
+by the tenant seed migration — so there is one artifact to point at rather than a
+convention to remember. It must also cover the two registry-only settings,
+`rewakeUrl` and `rewakeDelay`.
