@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { resolveOnyxPath, pinTenantFields, ALLOWED_PATHS } from './proxy.js';
+import { Readable, Writable } from 'node:stream';
+import { resolveOnyxPath, pinTenantFields, ALLOWED_PATHS, forwardToOnyx } from './proxy.js';
 
 describe('resolveOnyxPath', () => {
   it('maps a proxied path onto the Onyx api prefix', () => {
@@ -79,5 +80,81 @@ describe('pinTenantFields', () => {
   it('passes non-object bodies through untouched', () => {
     expect(pinTenantFields(undefined, tenant)).toBeUndefined();
     expect(pinTenantFields('raw', tenant)).toBe('raw');
+  });
+});
+
+describe('forwardToOnyx', () => {
+  // A real Writable: Readable.pipe() calls emit/once on its destination, not
+  // just write/on, so an object literal would not work here.
+  function collectingResponse() {
+    const chunks = [];
+    const headers = {};
+    const writable = new Writable({
+      write(chunk, _enc, done) {
+        chunks.push(chunk.toString());
+        done();
+      },
+    });
+    writable.set = (key, value) => {
+      headers[key] = value;
+    };
+    return { res: writable, chunks, headers };
+  }
+
+  function upstreamWith(transferEncoding, contentType, chunks) {
+    return {
+      headers: {
+        get: (name) =>
+          ({ 'transfer-encoding': transferEncoding, 'content-type': contentType })[
+            String(name).toLowerCase()
+          ],
+      },
+      body: Readable.from(chunks),
+    };
+  }
+
+  it('pipes the body through rather than buffering it', async () => {
+    const { res, chunks } = collectingResponse();
+    await forwardToOnyx(upstreamWith('chunked', null, ['a', 'b', 'c']), res, {});
+    expect(chunks.join('')).toBe('abc');
+  });
+
+  it('arrives incrementally, so tokens can render as they stream', async () => {
+    const { res, chunks } = collectingResponse();
+    const upstream = upstreamWith('chunked', null, ['first', 'second']);
+    const seen = [];
+    res.on('pipe', () => seen.push('piped'));
+    await forwardToOnyx(upstream, res, {});
+    // More than one write means the response was not collected then flushed once.
+    expect(chunks.length).toBeGreaterThan(1);
+  });
+
+  it('marks a chunked upstream response as an event stream', async () => {
+    const { res, headers } = collectingResponse();
+    await forwardToOnyx(upstreamWith('chunked', null, ['x']), res, {});
+    expect(headers['Content-Type']).toBe('text/event-stream');
+  });
+
+  it('marks a non-chunked upstream response as json', async () => {
+    const { res, headers } = collectingResponse();
+    await forwardToOnyx(upstreamWith(null, 'application/json', ['{}']), res, {});
+    expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('passes the upstream content type through when an api key is in use', async () => {
+    const { res, headers } = collectingResponse();
+    await forwardToOnyx(upstreamWith(null, 'text/plain', ['x']), res, { apiKey: 'k' });
+    expect(headers['Content-Type']).toBe('text/plain');
+  });
+
+  it('rejects when the upstream stream errors', async () => {
+    const { res } = collectingResponse();
+    const body = new Readable({
+      read() {
+        this.destroy(new Error('upstream died'));
+      },
+    });
+    const upstream = { headers: { get: () => 'chunked' }, body };
+    await expect(forwardToOnyx(upstream, res, {})).rejects.toThrow(/upstream died/);
   });
 });

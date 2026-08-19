@@ -41,3 +41,21 @@ export function pinTenantFields(body, tenant) {
     alternate_assistant_id: tenant.assistantId,
   };
 }
+
+// Streaming must stay incremental — the widget renders tokens as they arrive, so
+// buffering the whole answer here would make every reply appear at once.
+export async function forwardToOnyx(upstream, res, { apiKey } = {}) {
+  if (apiKey) {
+    res.set('Content-Type', upstream.headers.get('content-type') || 'application/json');
+  } else if (upstream.headers.get('transfer-encoding') === 'chunked') {
+    res.set('Content-Type', 'text/event-stream');
+  } else {
+    res.set('Content-Type', 'application/json');
+  }
+
+  await new Promise((resolve, reject) => {
+    upstream.body.on('error', reject);
+    upstream.body.on('end', resolve);
+    upstream.body.pipe(res);
+  });
+}
