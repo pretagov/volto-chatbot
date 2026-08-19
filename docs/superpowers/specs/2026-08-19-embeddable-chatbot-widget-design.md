@@ -85,9 +85,18 @@ reached only through files the widget never imports, so **six need aliases**:
 | `@plone/volto/icons/code.svg` | **No shim needed** — only `src/ChatBlock/index.js` imports it. |
 
 The widget imports the view path: `ChatWindow`, `ChatMessageBubble`, `Citation`,
-`CompactSourceCard`, the agent thinking display and their dependencies. It does
-**not** import `ChatBlockEdit.jsx` (editor-only) or `src/ChatBlock/index.js`
-(Volto block registration, which pulls in the editor and the block schema).
+`CompactSourceCard`, the agent thinking display and their dependencies.
+
+It does **not** import:
+
+- `ChatBlockEdit.jsx` — editor-only
+- `src/ChatBlock/index.js` — Volto block registration, which pulls in the editor
+  and the block schema
+- `ChatBlockView.jsx` — imports `SidebarChatbotStartButton` from the Volto
+  sidebar shell, which the widget replaces, and pulls in `superagent`
+- `withDanswerData.jsx` — reached only through the three files above
+
+The widget shell provides its own equivalent of `ChatBlockView`'s role.
 
 ### The registry is a second config channel
 
@@ -123,6 +132,11 @@ upstream's presentational components, reused unchanged.
 - `GET /w/<tenant>` — the widget document. The embedding-origin check happens
   here (see Trust model).
 - `GET /w/<tenant>/config` — the tenant's config, in the shared contract shape.
+- `GET /w/<tenant>/session` — re-mints an expired session token. Because this is
+  a fetch rather than a document, `frame-ancestors` cannot protect it and the
+  `Referer` check is only advisory, so it must never mint from nothing: it
+  requires the **expired but validly signed** token and re-issues only for the
+  same tenant. Otherwise it is a token faucet.
 - `ALL /_da/*` — Onyx proxy with streaming passthrough, ported from `middleware.js`.
 - `ALL /_ha/*` — HallOumi grounding, ported from `halloumi/middleware.js`.
 
@@ -137,9 +151,14 @@ The routes accept any method rather than POST only, because `lib.js` also issues
 a **GET** health ping to `config.settings["volto-chatbot"].rewakeUrl`, defaulted
 by the add-on to `/_da/health` and fired on a timer by `useBackendChat.js`.
 
-The proxied Onyx path allowlist is therefore exactly: `chat/send-message`,
-`chat/create-chat-session`, `chat/create-chat-message-feedback`, `health`, and
-`persona/-1` (the credential check). Anything else is refused.
+The proxied Onyx path allowlist is therefore exactly four entries:
+`chat/send-message`, `chat/create-chat-session`,
+`chat/create-chat-message-feedback` and `health`. Anything else is refused.
+
+`persona/-1` is deliberately **not** on it. The middleware's own credential check
+calls that path server-to-server inside `login()`, never through the
+client-facing proxy, so allowing it would widen the surface the allowlist exists
+to narrow.
 
 Tenant config lives in a Postgres table. No admin UI in v1; seed through a
 migration and add one later if it earns its place.
@@ -216,7 +235,29 @@ editing them would break the merge strategy. Two mechanisms were considered:
 - *A `fetch` wrapper installed by the widget shell* — chosen. The shell patches
   `window.fetch` inside the iframe at boot to attach the token to same-origin
   `/_da/*` and `/_ha/*` requests. It is shell code in a new file, needs no
-  upstream edit, and is unaffected by cookie policy.
+  upstream edit, and is unaffected by cookie policy. Every live proxy call in the
+  widget's graph goes through global `fetch` (`lib.js` for health, session
+  creation, feedback and send-message; `useQualityMarkers.js` for grounding), so
+  the wrapper catches all of them.
+
+The wrapper must return the `Response` untouched so streaming stays incremental,
+and forward `init.signal` so aborts still propagate.
+
+**The wrapper covers `fetch` only.** `superagent` is imported by
+`ChatBlockView.jsx` and `ChatBlockEdit.jsx`, and its XHR-based calls would bypass
+the wrapper entirely — no token, and a silent failure. Both files are excluded
+from the widget's graph today, and the one live `superagent` persona call sits in
+the editor, but upstream plainly intends the commented-out `ChatBlockView` one to
+return. Nothing about that change would move a file, so the CI build guard would
+not notice. The widget build therefore **asserts `superagent` is absent from the
+bundle**, so its reappearance on a reused path fails CI loudly rather than
+shipping untokenised requests.
+
+**Storage needs the same treatment.** `useBackendChat.js` reads and writes
+`localStorage` directly for its `chat-last-awake` key. In Safari with storage
+blocked, property access on `localStorage` *throws*, inside a file we cannot
+edit. The shell therefore installs a storage guard at boot alongside the fetch
+wrapper — same pattern, same reason.
 
 **What the origin check is actually worth.** `Sec-Fetch-Site` reports only
 `same-site`/`cross-site` — never *which* site — so the check rests on `Referer`,
@@ -306,14 +347,27 @@ Testing concentrates on the new boundaries, where the risk is.
 
 **Widget shell:** a failed config fetch renders no launcher; config drives starter
 prompts, title and theme; a stored session id resumes the conversation after a
-simulated navigation; the `fetch` wrapper attaches the token to `/_da/*` and
-`/_ha/*` but not to other requests, and re-mints once on a `401`.
+simulated navigation.
+
+The `fetch` wrapper specifically:
+
+- attaches the token to `/_da/*` and `/_ha/*`, and to nothing else
+- returns the `Response` untouched, so streaming stays incremental
+- forwards `init.signal`, without which the admission-metering abort test cannot
+  pass
+- re-mints once on a `401`, and surfaces an error rather than looping on a second
+
+The shell seeds `rewakeUrl` as a **path** (`/_da/health`), not an absolute URL —
+the wrapper matches on path prefix, so an absolute URL would send the health ping
+untokenised.
+
+**CI bundle guard:** `superagent` must be absent from the widget bundle.
 
 **Reused components.** `src/ChatBlock/` has tests for eight modules, but several
 on the widget's critical path have none — `ChatWindow.jsx`, `useBackendChat.js`,
-`withDanswerData.jsx`, `ChatMessageFeedback.jsx`, `MarkdownComponents.jsx`. We do
-not add unit tests there, because they are upstream files and diverging tests
-invite conflicts. The end-to-end test is what covers that path.
+`ChatMessageFeedback.jsx`, `MarkdownComponents.jsx`. We do not add unit tests
+there, because they are upstream files and diverging tests invite conflicts. The
+end-to-end test is what covers that path.
 
 **CI build guard.** Building the widget bundle on every CI run is the tripwire for
 importing upstream components by path: if EEA moves a file, CI goes red instead of
