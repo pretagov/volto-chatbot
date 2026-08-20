@@ -1,60 +1,85 @@
-// Attaches the session token to proxy calls.
-//
-// This exists because the reused components issue bare fetch() calls —
-// lib.js for health, session creation, feedback and send-message, and
-// useQualityMarkers.js for grounding — with no hook for a header, and those files
-// must not be edited or the merge strategy collapses.
-//
-// A cookie would have been the obvious alternative and does not work: the widget
-// runs in an iframe on someone else's site, making it a third-party cookie, which
-// Safari blocks outright and Chrome is removing. It would fail in exactly the
-// embedded case the product exists for.
+import { resolveOnyxPath, pathOf, PROXY_PREFIX } from '../onyx/paths.js';
+import { translateRequest, createTranslateStream } from '../onyx/protocol.js';
 
-const PROXY_PREFIXES = ['/_da/', '/_ha/'];
+// Points the reused components at Onyx and reshapes the traffic on the way.
+//
+// This exists because those components issue bare fetch() calls — lib.js for
+// health, session creation, feedback and send-message — with no hook for a base
+// URL or a body transform, and those files must not be edited or the merge
+// strategy collapses. So the seam is fetch itself.
+//
+// There is no credential here by design: Onyx is called anonymously, resolving
+// the caller to its anonymous user whose ACL is exactly {PUBLIC}. Nothing secret
+// reaches the page because nothing secret is involved.
 
-function isProxyRequest(input) {
-  const url = typeof input === 'string' ? input : (input?.url ?? '');
-  // Match on path so an absolute same-origin URL still qualifies. This is also
-  // why rewakeUrl must be seeded as a path, not an absolute URL.
-  const path = url.startsWith('http') ? new URL(url).pathname : url;
-  return PROXY_PREFIXES.some((prefix) => path.startsWith(prefix));
+function isOnyxRequest(input) {
+  return pathOf(input).startsWith(PROXY_PREFIX);
 }
 
-function withToken(init, token) {
-  const headers = new Headers(init?.headers || {});
-  headers.set('Authorization', `Bearer ${token}`);
-  return { ...init, headers };
+// The chat turn is the only call that streams the packet protocol; the rest
+// return plain JSON.
+function needsTranslation(target) {
+  return target.includes('send-chat-message');
 }
 
-export function installFetchWrapper({ getToken, setToken, tenant }) {
+function reshapeBody(init, target) {
+  if (!init?.body || typeof init.body !== 'string') return init?.body;
+  // Only our own JSON bodies are reshaped; anything unparseable is passed on
+  // untouched rather than guessed at.
+  let parsed;
+  try {
+    parsed = JSON.parse(init.body);
+  } catch {
+    return init.body;
+  }
+  return JSON.stringify(translateRequest(parsed, target));
+}
+
+export function installFetchWrapper({ onyxBaseUrl, personaId, forcedToolId }) {
+  if (!onyxBaseUrl) throw new Error('installFetchWrapper needs an onyxBaseUrl');
+
   // Keep both: the raw reference so uninstall restores exactly what was there,
   // and a bound copy to call with, since fetch must be invoked on globalThis.
   const rawFetch = globalThis.fetch;
   const originalFetch = rawFetch.bind(globalThis);
 
-  async function remint() {
-    const response = await originalFetch(`/w/${tenant}/session`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (!response.ok) return null;
-    const { token } = await response.json();
-    if (token && setToken) setToken(token);
-    return token;
-  }
-
   globalThis.fetch = async function wrappedFetch(input, init) {
-    if (!isProxyRequest(input)) return originalFetch(input, init);
+    if (!isOnyxRequest(input)) return originalFetch(input, init);
 
-    // Returned as-is: reading or cloning the body here would break incremental
-    // streaming, and init is spread so signal and the rest pass through.
-    const response = await originalFetch(input, withToken(init, getToken()));
-    if (response.status !== 401) return response;
+    const target = resolveOnyxPath(input);
+    // A widget path we do not map is a bug, not something to forward blindly at
+    // an origin that would answer it.
+    if (!target) throw new Error(`no Onyx route for ${pathOf(input)}`);
 
-    const fresh = await remint();
-    if (!fresh) return response;
+    let body = reshapeBody(init, target);
 
-    // Exactly one retry. A second 401 surfaces rather than looping.
-    return originalFetch(input, withToken(init, fresh));
+    // The assistant is fixed when the session is created — the new
+    // SendMessageRequest carries no persona at all — so this is the only place
+    // the persona can be applied.
+    if (target.includes('create-chat-session') && personaId != null) {
+      body = JSON.stringify({ ...JSON.parse(body || '{}'), persona_id: Number(personaId) });
+    }
+
+    // Retrieval is the assistant's choice under upgraded Onyx, and for a
+    // question it believes it can answer from general knowledge it does not
+    // search at all. Forcing the tool restores the old always-retrieve
+    // behaviour.
+    if (needsTranslation(target) && forcedToolId != null) {
+      body = JSON.stringify({
+        ...JSON.parse(body || '{}'),
+        forced_tool_id: Number(forcedToolId),
+      });
+    }
+
+    const response = await originalFetch(`${onyxBaseUrl}${target}`, { ...init, body });
+    if (!needsTranslation(target) || !response.body) return response;
+
+    // Piped rather than buffered, so tokens still render as they arrive.
+    return new Response(response.body.pipeThrough(createTranslateStream()), {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
   };
 
   return function uninstall() {

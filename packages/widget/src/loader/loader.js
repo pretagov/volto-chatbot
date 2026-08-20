@@ -25,12 +25,35 @@ function applyPosition(frame, position) {
   }
 }
 
+// Attributes the loader consumes itself rather than passing on to the widget.
+const LOADER_ONLY = new Set(['position']);
+
+// data-chat-title becomes chatTitle, so the snippet reads like HTML and the
+// widget still sees its contract's names.
+function camelCase(name) {
+  return name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+// Everything the demo needs travels in the iframe URL: which Onyx, which
+// persona, and how the panel should look. No lookup, no registry, no server.
+export function buildWidgetUrl(script, widgetOrigin) {
+  const params = new URLSearchParams();
+  for (const { name, value } of script.attributes) {
+    if (!name.startsWith('data-')) continue;
+    const key = name.slice('data-'.length);
+    if (LOADER_ONLY.has(key)) continue;
+    params.append(camelCase(key), value);
+  }
+  return `${widgetOrigin}/widget.html?${params.toString()}`;
+}
+
 export function boot(script = document.currentScript) {
   if (!script) return null;
 
-  const tenant = script.getAttribute('data-tenant');
-  // No guessing: without a tenant there is nothing sensible to load.
-  if (!tenant) return null;
+  const persona = script.getAttribute('data-persona');
+  // No guessing: one chat is one persona, and without it there is nothing to
+  // load.
+  if (!persona) return null;
 
   // A site pasting the snippet twice should not get two launchers.
   const existing = document.querySelector(`iframe[${WIDGET_ORIGIN_ATTR}]`);
@@ -40,10 +63,10 @@ export function boot(script = document.currentScript) {
   const position = script.getAttribute('data-position') === 'left' ? 'left' : 'right';
 
   const frame = document.createElement('iframe');
-  frame.setAttribute(WIDGET_ORIGIN_ATTR, tenant);
+  frame.setAttribute(WIDGET_ORIGIN_ATTR, persona);
   frame.setAttribute('title', 'Chat');
   frame.setAttribute('allow', 'clipboard-write');
-  frame.src = `${widgetOrigin}/w/${tenant}`;
+  frame.src = buildWidgetUrl(script, widgetOrigin);
   frame.style.border = '0';
   frame.style.colorScheme = 'normal';
   frame.style.zIndex = '2147483647';

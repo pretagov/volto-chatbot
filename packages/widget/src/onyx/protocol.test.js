@@ -157,12 +157,25 @@ describe('translateRequest', () => {
 describe('createTranslateStream', () => {
   async function run(chunks) {
     const stream = createTranslateStream();
-    const out = [];
-    stream.on('data', (d) => out.push(d.toString()));
-    for (const chunk of chunks) stream.write(chunk);
-    stream.end();
-    await new Promise((resolve) => stream.on('end', resolve));
-    return out.join('');
+    const encoder = new TextEncoder();
+
+    // Read concurrently with writing: a TransformStream applies backpressure, so
+    // draining only after close would deadlock on anything larger than the queue.
+    const collected = (async () => {
+      const reader = stream.readable.getReader();
+      const decoder = new TextDecoder();
+      let out = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return out;
+        out += decoder.decode(value, { stream: true });
+      }
+    })();
+
+    const writer = stream.writable.getWriter();
+    for (const chunk of chunks) await writer.write(encoder.encode(chunk));
+    await writer.close();
+    return collected;
   }
 
   it('translates a stream of NDJSON packets', async () => {

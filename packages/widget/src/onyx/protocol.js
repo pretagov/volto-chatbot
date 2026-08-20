@@ -1,5 +1,3 @@
-import { Transform } from 'node:stream';
-
 // Translates upgraded Onyx's streaming protocol into the shape the existing chat
 // components already parse.
 //
@@ -152,12 +150,31 @@ export function translateRequest(body, onyxPath = '') {
   return request;
 }
 
+// A Web Streams TransformStream rather than a node one: this runs in the page,
+// piped off the fetch response body.
 export function createTranslateStream() {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
   let buffer = '';
 
-  return new Transform({
-    transform(chunk, _encoding, done) {
-      buffer += chunk.toString();
+  function emit(controller, line) {
+    let packet;
+    try {
+      packet = JSON.parse(line);
+    } catch {
+      // One bad line must not take the whole answer down.
+      return;
+    }
+    for (const translated of translatePacket(packet)) {
+      controller.enqueue(encoder.encode(`${JSON.stringify(translated)}\n`));
+    }
+  }
+
+  return new TransformStream({
+    transform(chunk, controller) {
+      // stream: true so a multi-byte character split across chunks is held
+      // rather than decoded into a replacement character.
+      buffer += decoder.decode(chunk, { stream: true });
 
       // Network chunks do not respect line boundaries, so keep the trailing
       // partial line for the next chunk.
@@ -165,32 +182,13 @@ export function createTranslateStream() {
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (!line.trim()) continue;
-        let packet;
-        try {
-          packet = JSON.parse(line);
-        } catch {
-          // One bad line must not take the whole answer down.
-          continue;
-        }
-        for (const translated of translatePacket(packet)) {
-          this.push(`${JSON.stringify(translated)}\n`);
-        }
+        if (line.trim()) emit(controller, line);
       }
-      done();
     },
 
-    flush(done) {
-      if (buffer.trim()) {
-        try {
-          for (const translated of translatePacket(JSON.parse(buffer))) {
-            this.push(`${JSON.stringify(translated)}\n`);
-          }
-        } catch {
-          // Truncated final line; nothing useful to salvage.
-        }
-      }
-      done();
+    flush(controller) {
+      // Truncated final line yields nothing useful, which emit already tolerates.
+      if (buffer.trim()) emit(controller, buffer);
     },
   });
 }

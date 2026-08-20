@@ -1,9 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext } from 'react';
 import registry from '../shims/registry.js';
 
 // Supplies what Volto used to. In the add-on the config comes from the current
-// Plone page's blocks via Redux; here it comes from the middleware, in the same
+// Plone page's blocks via Redux; here it comes from the embed, in the same
 // contract shape, so the reused components take identical config either way.
+//
+// It arrives as a prop rather than being fetched: the whole configuration is in
+// the iframe URL, so there is nothing to wait for and no failure mode where the
+// launcher renders before its settings do.
 
 const ChatConfigContext = createContext(null);
 
@@ -12,7 +16,7 @@ export function useChatConfig() {
 }
 
 // The reused components read these from the settings singleton rather than from
-// props, so the shell has to seed it before they render.
+// props, so seed it before they render.
 function seedRegistry(config) {
   registry.settings = {
     ...registry.settings,
@@ -24,34 +28,9 @@ function seedRegistry(config) {
   };
 }
 
-export function ConfigProvider({ children, tenant = globalThis.__CHAT_TENANT__ }) {
-  const [config, setConfig] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const response = await fetch(`/w/${tenant}/config`);
-        if (!response.ok) throw new Error(`config responded ${response.status}`);
-        const loaded = await response.json();
-        if (cancelled) return;
-        seedRegistry(loaded);
-        setConfig(loaded);
-      } catch {
-        // Fail closed. A launcher that opens onto a broken panel is worse on a
-        // customer's site than no launcher at all, so we render nothing.
-        if (!cancelled) setConfig(null);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [tenant]);
-
+export function ConfigProvider({ children, config }) {
   if (!config) return null;
-
+  seedRegistry(config);
   return <ChatConfigContext.Provider value={config}>{children}</ChatConfigContext.Provider>;
 }
 

@@ -6,7 +6,8 @@ const ORIGIN = 'https://chat.example';
 function addScriptTag(attrs = {}) {
   const script = document.createElement('script');
   script.src = `${ORIGIN}/loader.js`;
-  script.setAttribute('data-tenant', 'lecc');
+  script.setAttribute('data-onyx', 'https://onyx.example');
+  script.setAttribute('data-persona', '12');
   for (const [k, v] of Object.entries(attrs)) script.setAttribute(k, v);
   document.body.appendChild(script);
   return script;
@@ -21,11 +22,14 @@ afterEach(() => {
 });
 
 describe('boot', () => {
-  it('injects exactly one iframe pointing at the tenant widget', () => {
+  it('injects exactly one iframe carrying the demo config', () => {
     boot(addScriptTag());
     const frames = document.querySelectorAll('iframe');
     expect(frames.length).toBe(1);
-    expect(frames[0].src).toBe(`${ORIGIN}/w/lecc`);
+    const url = new URL(frames[0].src);
+    expect(url.origin + url.pathname).toBe(`${ORIGIN}/widget.html`);
+    expect(url.searchParams.get('persona')).toBe('12');
+    expect(url.searchParams.get('onyx')).toBe('https://onyx.example');
   });
 
   it('is idempotent when a site includes the script twice', () => {
@@ -35,9 +39,9 @@ describe('boot', () => {
     expect(document.querySelectorAll('iframe').length).toBe(1);
   });
 
-  it('does nothing without a tenant rather than guessing', () => {
+  it('does nothing without a persona rather than guessing', () => {
     const script = addScriptTag();
-    script.removeAttribute('data-tenant');
+    script.removeAttribute('data-persona');
     boot(script);
     expect(document.querySelectorAll('iframe').length).toBe(0);
   });
@@ -103,5 +107,28 @@ describe('WIDGET_ORIGIN_ATTR', () => {
   it('marks the iframe so a second boot can find it', () => {
     boot(addScriptTag());
     expect(document.querySelector(`iframe[${WIDGET_ORIGIN_ATTR}]`)).toBeTruthy();
+  });
+});
+
+describe('buildWidgetUrl', () => {
+  it('passes presentation attributes through as camelCase', () => {
+    // The snippet reads like HTML; the widget still sees its contract's names.
+    const script = addScriptTag({ 'data-chat-title': 'Ask B&NES' });
+    boot(script);
+    const url = new URL(document.querySelector('iframe').src);
+    expect(url.searchParams.get('chatTitle')).toBe('Ask B&NES');
+  });
+
+  it('keeps loader-only attributes out of the widget url', () => {
+    // position is the loader's business: it sizes and places the frame.
+    boot(addScriptTag({ 'data-position': 'left' }));
+    const url = new URL(document.querySelector('iframe').src);
+    expect(url.searchParams.get('position')).toBeNull();
+  });
+
+  it('carries a forced search tool through', () => {
+    boot(addScriptTag({ 'data-tool': '1' }));
+    const url = new URL(document.querySelector('iframe').src);
+    expect(url.searchParams.get('tool')).toBe('1');
   });
 });

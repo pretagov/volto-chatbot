@@ -1,139 +1,176 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installFetchWrapper } from './fetchWrapper.js';
 
-let calls;
-let uninstall;
+const ONYX = 'https://onyx.example';
 
-function fakeFetch(impl) {
-  const fn = vi.fn(impl ?? (async () => new Response('ok', { status: 200 })));
-  globalThis.fetch = fn;
-  return fn;
-}
-
-beforeEach(() => {
-  calls = [];
-});
-
+let uninstall = null;
 afterEach(() => {
   if (uninstall) uninstall();
-  uninstall = undefined;
+  uninstall = null;
+  vi.restoreAllMocks();
 });
 
-function headerOf(mockFetch, index = 0) {
-  const init = mockFetch.mock.calls[index][1] || {};
-  const headers = new Headers(init.headers || {});
-  return headers.get('authorization');
+function install(options = {}) {
+  const calls = [];
+  const stub = vi.fn(async (url, init) => {
+    calls.push({ url, init });
+    return new Response('{}', { status: 200 });
+  });
+  globalThis.fetch = stub;
+  uninstall = installFetchWrapper({ onyxBaseUrl: ONYX, ...options });
+  return calls;
+}
+
+// Emits the given lines as an NDJSON body, the way Onyx streams a chat turn.
+function ndjsonResponse(lines) {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream({
+    start(controller) {
+      for (const line of lines) controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200 });
+}
+
+async function readAll(response) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let out = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return out;
+    out += decoder.decode(value, { stream: true });
+  }
 }
 
 describe('installFetchWrapper', () => {
-  it('attaches the token to /_da/ requests', async () => {
-    // The reused components issue bare fetch() calls with no hook for a header,
-    // and they cannot be edited, so the wrapper is the only place this can happen.
-    const inner = fakeFetch();
-    uninstall = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
-    await fetch('/_da/chat/send-message', { method: 'POST' });
-    expect(headerOf(inner)).toBe('Bearer tok');
+  it('sends widget requests to Onyx rather than to the page origin', async () => {
+    const calls = install();
+    await fetch('/_da/chat/create-chat-session', { method: 'POST', body: '{}' });
+    expect(calls[0].url).toBe(`${ONYX}/api/chat/create-chat-session`);
   });
 
-  it('attaches the token to /_ha/ requests', async () => {
-    const inner = fakeFetch();
-    uninstall = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
-    await fetch('/_ha/generate', { method: 'POST' });
-    expect(headerOf(inner)).toBe('Bearer tok');
+  it('maps the old send-message name onto the renamed endpoint', async () => {
+    // lib.js still calls chat/send-message and is deliberately not edited, so
+    // the rename is handled here.
+    const calls = install();
+    await fetch('/_da/chat/send-message', { method: 'POST', body: '{"message":"hi"}' });
+    expect(calls[0].url).toBe(`${ONYX}/api/chat/send-chat-message`);
   });
 
-  it('attaches nothing to unrelated requests', async () => {
-    const inner = fakeFetch();
-    uninstall = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
-    await fetch('/some/other/thing');
-    expect(headerOf(inner)).toBeNull();
+  it('sends health where the deployment actually serves it', async () => {
+    // Confirmed by calling it: /health is a 404, /api/health is the endpoint.
+    const calls = install();
+    await fetch('/_da/health');
+    expect(calls[0].url).toBe(`${ONYX}/api/health`);
   });
 
-  it('leaves existing headers in place', async () => {
-    const inner = fakeFetch();
-    uninstall = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
+  it('leaves unrelated requests alone', async () => {
+    const calls = install();
+    await fetch('/some/page/asset.png');
+    expect(calls[0].url).toBe('/some/page/asset.png');
+  });
+
+  it('sends no credentials, because Onyx is called anonymously', async () => {
+    const calls = install();
+    await fetch('/_da/chat/create-chat-session', { method: 'POST', body: '{}' });
+    const headers = new Headers(calls[0].init?.headers || {});
+    expect(headers.get('Authorization')).toBeNull();
+    expect(headers.get('Cookie')).toBeNull();
+  });
+
+  it('applies the persona when the session is created', async () => {
+    // The new SendMessageRequest carries no persona - the assistant is fixed by
+    // the chat session - so this is the only place it can be applied.
+    const calls = install({ personaId: '12' });
+    await fetch('/_da/chat/create-chat-session', { method: 'POST', body: '{}' });
+    expect(JSON.parse(calls[0].init.body).persona_id).toBe(12);
+  });
+
+  it('forces the search tool on a chat turn, so retrieval actually happens', async () => {
+    const calls = install({ forcedToolId: '1' });
+    await fetch('/_da/chat/send-message', { method: 'POST', body: '{"message":"hi"}' });
+    expect(JSON.parse(calls[0].init.body).forced_tool_id).toBe(1);
+  });
+
+  it('does not force a tool when none is configured', async () => {
+    const calls = install();
+    await fetch('/_da/chat/send-message', { method: 'POST', body: '{"message":"hi"}' });
+    expect(JSON.parse(calls[0].init.body).forced_tool_id).toBeUndefined();
+  });
+
+  it('reshapes the message body onto the new request model', async () => {
+    const calls = install();
     await fetch('/_da/chat/send-message', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      body: '{"message":"hi","chat_session_id":"abc","persona_id":"7"}',
     });
-    const headers = new Headers(inner.mock.calls[0][1].headers);
-    expect(headers.get('content-type')).toBe('application/json');
-    expect(headers.get('authorization')).toBe('Bearer tok');
+    const sent = JSON.parse(calls[0].init.body);
+    expect(sent.message).toBe('hi');
+    expect(sent.chat_session_id).toBe('abc');
   });
 
-  it('returns the Response untouched, so streaming stays incremental', async () => {
-    // If the wrapper read or cloned the body, answers would stop rendering token
-    // by token and appear all at once.
-    const original = new Response('streamed', { status: 200 });
-    fakeFetch(async () => original);
-    uninstall = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
-    const result = await fetch('/_da/chat/send-message', { method: 'POST' });
-    expect(result).toBe(original);
-    expect(result.bodyUsed).toBe(false);
+  it('translates the streamed answer into the shape the components parse', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      ndjsonResponse([
+        { placement: {}, obj: { type: 'message_delta', content: 'Hello' } },
+        { placement: {}, obj: { type: 'stop' } },
+      ]),
+    );
+    uninstall = installFetchWrapper({ onyxBaseUrl: ONYX });
+
+    const response = await fetch('/_da/chat/send-message', { method: 'POST', body: '{}' });
+    const lines = (await readAll(response)).trim().split('\n').map((l) => JSON.parse(l));
+    expect(lines).toEqual([{ answer_piece: 'Hello' }]);
   });
 
-  it('forwards init.signal', async () => {
-    // Without this the middleware's abort behaviour cannot be exercised at all.
-    const inner = fakeFetch();
-    uninstall = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
+  it('streams incrementally rather than buffering the whole answer', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      ndjsonResponse([
+        { placement: {}, obj: { type: 'message_delta', content: 'a' } },
+        { placement: {}, obj: { type: 'message_delta', content: 'b' } },
+      ]),
+    );
+    uninstall = installFetchWrapper({ onyxBaseUrl: ONYX });
+
+    const response = await fetch('/_da/chat/send-message', { method: 'POST', body: '{}' });
+    const reader = response.body.getReader();
+    const first = await reader.read();
+    // Arriving before the stream ends is the point: tokens render as they come.
+    expect(new TextDecoder().decode(first.value)).toContain('"a"');
+  });
+
+  it('leaves a non-streaming response alone', async () => {
+    const calls = install();
+    const response = await fetch('/_da/chat/create-chat-session', { method: 'POST', body: '{}' });
+    expect(await response.text()).toBe('{}');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('forwards init.signal so a turn can be aborted', async () => {
+    const calls = install();
     const controller = new AbortController();
-    await fetch('/_da/chat/send-message', { method: 'POST', signal: controller.signal });
-    expect(inner.mock.calls[0][1].signal).toBe(controller.signal);
+    await fetch('/_da/health', { signal: controller.signal });
+    expect(calls[0].init.signal).toBe(controller.signal);
   });
 
-  it('re-mints once on a 401 and retries', async () => {
-    let attempt = 0;
-    const inner = fakeFetch(async (url) => {
-      if (String(url).includes('/session')) {
-        return new Response(JSON.stringify({ token: 'fresh' }), { status: 200 });
-      }
-      attempt += 1;
-      return new Response('', { status: attempt === 1 ? 401 : 200 });
-    });
-
-    let token = 'stale';
-    uninstall = installFetchWrapper({
-      getToken: () => token,
-      setToken: (t) => {
-        token = t;
-      },
-      tenant: 'lecc',
-    });
-
-    const res = await fetch('/_da/chat/send-message', { method: 'POST' });
-    expect(res.status).toBe(200);
-    expect(token).toBe('fresh');
-    expect(inner.mock.calls.some(([u]) => String(u).includes('/w/lecc/session'))).toBe(true);
+  it('refuses a widget path it has no Onyx route for', async () => {
+    // Forwarding an unmapped path blindly at an origin that might answer it is
+    // worse than failing loudly.
+    install();
+    await expect(fetch('/_da/chat/invented-endpoint')).rejects.toThrow(/no Onyx route/);
   });
 
-  it('surfaces a second 401 rather than looping', async () => {
-    const inner = fakeFetch(async (url) =>
-      String(url).includes('/session')
-        ? new Response(JSON.stringify({ token: 'fresh' }), { status: 200 })
-        : new Response('', { status: 401 }),
-    );
-    uninstall = installFetchWrapper({ getToken: () => 't', setToken: () => {}, tenant: 'lecc' });
-    const res = await fetch('/_da/chat/send-message', { method: 'POST' });
-    expect(res.status).toBe(401);
-    // One original call, one re-mint, one retry — and then it stops.
-    expect(inner.mock.calls.length).toBe(3);
-  });
-
-  it('gives up quietly when re-minting itself fails', async () => {
-    fakeFetch(async (url) =>
-      String(url).includes('/session')
-        ? new Response('', { status: 401 })
-        : new Response('', { status: 401 }),
-    );
-    uninstall = installFetchWrapper({ getToken: () => 't', setToken: () => {}, tenant: 'lecc' });
-    const res = await fetch('/_da/chat/send-message', { method: 'POST' });
-    expect(res.status).toBe(401);
-  });
-
-  it('restores the original fetch when uninstalled', async () => {
-    const inner = fakeFetch();
-    const stop = installFetchWrapper({ getToken: () => 'tok', tenant: 'lecc' });
+  it('restores the original fetch when uninstalled', () => {
+    const before = globalThis.fetch;
+    const stop = installFetchWrapper({ onyxBaseUrl: ONYX });
+    expect(globalThis.fetch).not.toBe(before);
     stop();
-    expect(globalThis.fetch).toBe(inner);
+    expect(globalThis.fetch).toBe(before);
+  });
+
+  it('refuses to install without an Onyx base url', () => {
+    expect(() => installFetchWrapper({})).toThrow(/onyxBaseUrl/);
   });
 });

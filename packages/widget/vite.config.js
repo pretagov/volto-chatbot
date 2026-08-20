@@ -72,7 +72,7 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        widget: here('index.html'),
+        widget: here('widget.html'),
         loader: here('src/loader/loader.js'),
       },
       output: {
