@@ -15,6 +15,10 @@ const app = createApp({
   secret: process.env.SESSION_SECRET,
   tenants: createTenantStore(pool),
   redis: new Redis(process.env.REDIS_URL),
+  // Where the widget package's build output was copied to. Without it the
+  // service still answers the proxy routes but serves a page with no widget in
+  // it, so a deployment must set this.
+  widgetDist: process.env.WIDGET_DIST,
   onyx: {
     baseUrl: process.env.DANSWER_URL,
     username: process.env.DANSWER_USERNAME,
