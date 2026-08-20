@@ -12,10 +12,16 @@
   "dependencies": {
     "@loadable/component": "^5.16.4",
     "@nanostores/react": "^0.7.2",
+    "dequal": "^2.0.3",
+    "highlight.js": "^11.10.0",
+    "marked": "^14.1.2",
     "nanostores": "^0.10.3",
+    "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "semantic-ui-react": "^2.1.5"
+    "react-textarea-autosize": "^8.5.3",
+    "semantic-ui-react": "^2.1.5",
+    "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16.0.1",

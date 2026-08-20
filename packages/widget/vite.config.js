@@ -1,8 +1,37 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
+import { transformWithEsbuild } from 'vite';
+
+// The add-on writes JSX inside .js files (utils.js and others). Volto's Babel
+// build allows that; Vite's esbuild pass rejects it before any plugin sees the
+// file, so re-transform those specific files with the jsx loader first.
+const jsxInJs = {
+  name: 'chatbot-jsx-in-js',
+  enforce: 'pre',
+  async transform(code, id) {
+    if (!/volto-chatbot\/src\/.*\.js$/.test(id)) return null;
+    return transformWithEsbuild(code, id, { loader: 'jsx', jsx: 'automatic' });
+  },
+};
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
+
+// Runtime packages the reused components import by bare specifier.
+const SHARED_DEPS = [
+  'semantic-ui-react',
+  'react-dom',
+  'react',
+  '@nanostores/react',
+  'nanostores',
+  '@loadable/component',
+  'prop-types',
+  'react-textarea-autosize',
+  'unist-util-visit',
+  'highlight.js',
+  'marked',
+  'dequal',
+];
 
 // The add-on's components are imported IN PLACE from ../../src and never edited,
 // so upstream changes keep merging cleanly. Everything Volto used to provide is
@@ -11,7 +40,9 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 // Order matters: Vite matches these in sequence, so the longer Loadable path must
 // come before the shorter one, and both before the bare helpers path.
 export default defineConfig({
-  plugins: [react()],
+  // The add-on writes JSX inside .js files (utils.js and others), which Volto's
+  // Babel build allows and esbuild does not. Let the react plugin handle both.
+  plugins: [jsxInJs, react({ include: /\.(js|jsx)$/ })],
   resolve: {
     alias: [
       { find: '@plone/volto/helpers/Loadable/Loadable', replacement: here('src/shims/loadable.jsx') },
@@ -27,6 +58,14 @@ export default defineConfig({
       // ChatWindow imports #stores/sidebarStore, a package imports subpath.
       { find: /^#stores\/(.*)/, replacement: here('../../src/sidebar/stores/$1') },
       { find: '@eeacms/volto-chatbot', replacement: here('../../src') },
+      // The reused components live in ../../src, so Node resolves their bare
+      // imports from volto-chatbot's node_modules — where these are not
+      // installed. Point them at the widget's copies rather than adding deps to
+      // upstream's package.json, which would be a merge-conflict risk.
+      ...SHARED_DEPS.map((dep) => ({
+        find: new RegExp(`^${dep.replace('/', '\\/')}$`),
+        replacement: here(`node_modules/${dep}`),
+      })),
     ],
   },
   build: {
