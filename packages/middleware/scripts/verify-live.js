@@ -18,11 +18,12 @@ import { mintToken } from '../src/session.js';
 
 const ONYX_URL = process.env.ONYX_URL || 'https://pg-demo-onyx.fly.dev';
 const API_KEY = process.env.ONYX_API_KEY;
+const ANONYMOUS = process.env.ONYX_ANONYMOUS === 'true';
 const ASSISTANT_ID = process.env.TENANT_ASSISTANT_ID || '0';
 const SECRET = 'local-verify-secret';
 
-if (!API_KEY) {
-  console.error('Set ONYX_API_KEY (an Onyx API key) before running.');
+if (!ANONYMOUS && !API_KEY) {
+  console.error('Set ONYX_API_KEY, or ONYX_ANONYMOUS=true to call Onyx anonymously.');
   process.exit(1);
 }
 
@@ -40,7 +41,9 @@ const app = createApp({
   secret: SECRET,
   tenants: { get: async () => tenant },
   redis: { incr: async () => 1, expire: async () => {} },
-  onyx: { baseUrl: ONYX_URL, apiKey: API_KEY },
+  onyx: ANONYMOUS
+    ? { baseUrl: ONYX_URL, anonymous: true }
+    : { baseUrl: ONYX_URL, apiKey: API_KEY },
   halloumi: { url: process.env.LLMGW_URL, token: process.env.LLMGW_TOKEN },
 });
 
@@ -86,7 +89,12 @@ try {
     method: 'POST',
     headers: auth,
     body: JSON.stringify({
-      message: 'What is this site about?',
+      // Retrieval is agentic now: the assistant decides whether to search. A
+      // question it can answer conversationally will not exercise the search
+      // packets, so ask one that requires the corpus.
+      message:
+        process.env.QUESTION ||
+        'Search the indexed documents and tell me what topics they cover.',
       chat_session_id: session.chat_session_id,
     }),
   });
