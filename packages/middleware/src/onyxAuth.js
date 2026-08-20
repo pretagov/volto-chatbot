@@ -35,6 +35,20 @@ export async function loginToOnyx({ baseUrl, username, password }) {
 }
 
 export async function getAuthHeaders(creds, login = loginToOnyx) {
+  // Anonymous access must be asked for explicitly, never inferred from missing
+  // credentials: Onyx resolves an unauthenticated caller to its anonymous user,
+  // so a config mistake would silently downgrade the widget to public access
+  // instead of failing. Combining it with credentials is contradictory — which
+  // identity is the widget running as? — so that is an error too.
+  if (creds.anonymous) {
+    if (creds.apiKey || creds.username || creds.password) {
+      throw new Error(
+        'Invalid configuration: anonymous access cannot be combined with credentials',
+      );
+    }
+    return {};
+  }
+
   if (creds.apiKey) {
     return { Authorization: `Bearer ${creds.apiKey}` };
   }

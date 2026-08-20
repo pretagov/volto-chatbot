@@ -20,6 +20,11 @@ const app = createApp({
     username: process.env.DANSWER_USERNAME,
     password: process.env.DANSWER_PASSWORD,
     apiKey: process.env.DANSWER_API_KEY,
+    // Opt in to calling Onyx with no credentials at all, so it resolves the
+    // caller to its anonymous user (ACL = {PUBLIC}). Requires anonymous access to
+    // be enabled on the Onyx side; leaving any credential set alongside this is
+    // rejected rather than silently ignored.
+    anonymous: process.env.DANSWER_ANONYMOUS === 'true',
   },
   halloumi: { url: process.env.LLMGW_URL, token: process.env.LLMGW_TOKEN },
 });

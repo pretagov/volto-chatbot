@@ -32,6 +32,30 @@ describe('getAuthHeaders', () => {
     await expect(getAuthHeaders({}, vi.fn())).rejects.toThrow(/configuration/i);
   });
 
+  it('sends no credentials when anonymous access is explicitly enabled', async () => {
+    // Onyx resolves an unauthenticated caller to its anonymous user, whose ACL is
+    // exactly {PUBLIC} — which is the whole point: the widget serves public
+    // content and should hold no identity beyond that.
+    const login = vi.fn();
+    const headers = await getAuthHeaders({ anonymous: true }, login);
+    expect(headers).toEqual({});
+    expect(login).not.toHaveBeenCalled();
+  });
+
+  it('refuses to combine anonymous access with credentials', async () => {
+    // Silently preferring one over the other would make it impossible to tell
+    // which identity the widget is actually running as. Fail loudly instead.
+    await expect(getAuthHeaders({ anonymous: true, apiKey: 'k' }, vi.fn())).rejects.toThrow(
+      /anonymous/i,
+    );
+  });
+
+  it('still throws on an empty config rather than silently going anonymous', async () => {
+    // Anonymous has to be asked for. A missing api key is a misconfiguration, and
+    // quietly downgrading it to public access would hide that.
+    await expect(getAuthHeaders({}, vi.fn())).rejects.toThrow(/configuration/i);
+  });
+
   it('never returns the raw credentials in the headers', async () => {
     // The whole reason this proxy exists is to keep Onyx credentials out of the
     // browser, so what it hands back must not contain them.
