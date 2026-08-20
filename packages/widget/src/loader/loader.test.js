@@ -132,3 +132,20 @@ describe('buildWidgetUrl', () => {
     expect(url.searchParams.get('tool')).toBe('1');
   });
 });
+
+describe('serving from a subdirectory', () => {
+  it('resolves the widget next to the loader, not at the origin root', () => {
+    // It is mounted under an existing site's public directory rather than on a
+    // host of its own, so the origin root is not ours to assume.
+    const script = document.createElement('script');
+    script.src = `${ORIGIN}/chat/loader.js`;
+    script.setAttribute('data-onyx', 'https://onyx.example');
+    script.setAttribute('data-persona', '12');
+    document.body.appendChild(script);
+
+    boot(script);
+    const url = new URL(document.querySelector('iframe').src);
+    expect(url.pathname).toBe('/chat/widget.html');
+    expect(url.searchParams.get('persona')).toBe('12');
+  });
+});

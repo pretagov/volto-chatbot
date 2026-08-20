@@ -36,7 +36,11 @@ function camelCase(name) {
 
 // Everything the demo needs travels in the iframe URL: which Onyx, which
 // persona, and how the panel should look. No lookup, no registry, no server.
-export function buildWidgetUrl(script, widgetOrigin) {
+//
+// Resolved against the loader's own directory rather than the origin root,
+// because it is served from a subdirectory of an existing site rather than from
+// a host of its own.
+export function buildWidgetUrl(script) {
   const params = new URLSearchParams();
   for (const { name, value } of script.attributes) {
     if (!name.startsWith('data-')) continue;
@@ -44,7 +48,8 @@ export function buildWidgetUrl(script, widgetOrigin) {
     if (LOADER_ONLY.has(key)) continue;
     params.append(camelCase(key), value);
   }
-  return `${widgetOrigin}/widget.html?${params.toString()}`;
+  const here = new URL('.', new URL(script.src, window.location.href));
+  return new URL(`widget.html?${params.toString()}`, here).href;
 }
 
 export function boot(script = document.currentScript) {
@@ -66,7 +71,7 @@ export function boot(script = document.currentScript) {
   frame.setAttribute(WIDGET_ORIGIN_ATTR, persona);
   frame.setAttribute('title', 'Chat');
   frame.setAttribute('allow', 'clipboard-write');
-  frame.src = buildWidgetUrl(script, widgetOrigin);
+  frame.src = buildWidgetUrl(script);
   frame.style.border = '0';
   frame.style.colorScheme = 'normal';
   frame.style.zIndex = '2147483647';

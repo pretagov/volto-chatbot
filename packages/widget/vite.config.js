@@ -68,6 +68,10 @@ export default defineConfig({
       })),
     ],
   },
+  // Relative asset URLs so the built page works wherever it is mounted. It is
+  // served from a subdirectory of the Onyx web server's public/ rather than a
+  // host root, and absolute /assets/ paths would resolve against that root.
+  base: './',
   build: {
     outDir: 'dist',
     rollupOptions: {
