@@ -1,6 +1,11 @@
 import superagent from 'superagent';
 import fetch from 'node-fetch';
 import debug from 'debug';
+// pretagov fork: upgraded Onyx renamed the chat endpoint and replaced the flat
+// packet stream with NDJSON Packet envelopes, so this proxy has to translate.
+// The logic is shared with the hosted middleware rather than duplicated here.
+import { translateRequest, createTranslateStream } from '../packages/middleware/src/protocol.js';
+import { resolveOnyxPath } from '../packages/middleware/src/proxy.js';
 
 const log = debug('volto-chatbot');
 
@@ -102,7 +107,8 @@ async function send_danswer_request(
   };
 
   if (req.body && req.method === 'POST') {
-    options.body = JSON.stringify(req.body);
+    // pretagov fork: reshape for the new SendMessageRequest model.
+    options.body = JSON.stringify(translateRequest(req.body, url));
   }
   try {
     log(`Fetching ${url}`);
@@ -118,16 +124,30 @@ async function send_danswer_request(
       res.set('Content-Type', response.headers.get('Content-Type'));
     }
 
-    response.body.pipe(res);
+    // pretagov fork: the chat turn now streams Packet envelopes; translate them
+    // back to the flat shape the components parse. Still a pipe, so the answer
+    // stays incremental.
+    if (url.includes('send-chat-message')) {
+      response.body.pipe(createTranslateStream()).pipe(res);
+    } else {
+      response.body.pipe(res);
+    }
   } catch (error) {
     throw error;
   }
 }
 
 export default async function middleware(req, res, next) {
-  const path = req.url.replace('/_da/', '/');
+  // pretagov fork: chat/send-message no longer exists (it is send-chat-message
+  // now) and health moved to the root, so the target is resolved rather than
+  // assumed to be apiPrefix + path.
+  const resolved = resolveOnyxPath(req.url);
+  if (!resolved) {
+    res.status(403).send({ error: 'path not allowed' });
+    return;
+  }
 
-  const reqUrl = `${process.env.DANSWER_URL}${apiPrefix}${path}`;
+  const reqUrl = `${process.env.DANSWER_URL}${resolved}`;
 
   const username = process.env.DANSWER_USERNAME;
   const password = process.env.DANSWER_PASSWORD;
