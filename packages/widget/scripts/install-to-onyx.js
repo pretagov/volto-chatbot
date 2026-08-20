@@ -28,7 +28,10 @@ const onyxRoot =
 
 // Namespaced rather than dropped at the root: public/ is an upstream directory
 // shared with Onyx's own assets, and the widget's file names are hashed.
-const target = join(onyxRoot, 'web', 'public', 'chat');
+//
+// NOT /chat — Onyx's next.config.js permanently redirects /chat/:path* to
+// /app/:path*, so anything mounted there is unreachable.
+const target = join(onyxRoot, 'web', 'public', 'embed');
 
 if (!existsSync(dist)) {
   console.error(`No build at ${dist}. Run "npm run build" first.`);
@@ -46,4 +49,4 @@ mkdirSync(target, { recursive: true });
 cpSync(dist, target, { recursive: true });
 
 console.log(`installed widget -> ${target}`);
-console.log('served at /chat/loader.js once the Onyx web server is deployed');
+console.log('served at /embed/loader.js once the Onyx web server is deployed');
