@@ -29,7 +29,15 @@ export const DEFAULTS = {
 // Fields the browser must never see. The assistant id above all: it is pinned
 // server-side precisely so a caller cannot point one tenant's endpoint at
 // another tenant's assistant.
-const SERVER_ONLY = ['tenantId', 'assistantId', 'dailyTurnCap', 'allowedOrigins'];
+const SERVER_ONLY = [
+  'tenantId',
+  'assistantId',
+  'dailyTurnCap',
+  'allowedOrigins',
+  // Decides which tool the assistant is compelled to run, so it is pinned from
+  // the tenant record rather than offered to the browser.
+  'searchToolId',
+];
 
 export function validateTenantConfig(record) {
   if (!record?.tenantId) throw new Error('tenant record needs a tenantId');

@@ -69,9 +69,21 @@ export function pinTenantFields(body, tenant, onyxPath = '') {
     };
   }
 
-  // Nothing tenant-scoped to pin on other endpoints: the session already decides
-  // which assistant answers.
-  return { ...body };
+  // Retrieval is no longer guaranteed. Upgraded Onyx sets search_usage to AUTO
+  // for every custom persona, so the assistant decides whether to search, and
+  // for a question it believes it can answer from general knowledge it does not
+  // — answering confidently from the model's own knowledge rather than from the
+  // tenant's documents. forced_tool_id sets tool_choice=REQUIRED, restoring the
+  // old behaviour where every turn retrieved.
+  //
+  // The id comes from the tenant record and never from the client: it drives
+  // which tool the assistant is compelled to run.
+  const { forced_tool_id: _clientChoice, ...rest } = body;
+  if (tenant.searchToolId) {
+    return { ...rest, forced_tool_id: Number(tenant.searchToolId) };
+  }
+
+  return rest;
 }
 
 // Global fetch (undici) returns a Web ReadableStream, which has no .pipe or .on.

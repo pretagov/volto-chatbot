@@ -52,6 +52,15 @@ describe('toWidgetConfig', () => {
     expect(widget.allowedOrigins).toBeUndefined();
   });
 
+  it('keeps the forced search tool server-side', () => {
+    // It decides which tool the assistant is compelled to run, so it is pinned
+    // from the tenant record rather than offered to the browser.
+    const widget = toWidgetConfig(
+      validateTenantConfig({ ...validRecord(), searchToolId: '1' }),
+    );
+    expect(widget.searchToolId).toBeUndefined();
+  });
+
   it('keeps the presentation and registry fields the widget needs', () => {
     const widget = toWidgetConfig(validateTenantConfig(validRecord()));
     expect(widget.chatTitle).toBe(DEFAULTS.chatTitle);

@@ -87,6 +87,32 @@ describe('pinTenantFields', () => {
     expect(body.persona_id).toBeUndefined();
   });
 
+  // Upgraded Onyx sets search_usage to AUTO for every custom persona, so the
+  // model decides whether to retrieve — and for questions it believes it can
+  // answer from general knowledge it simply does not. Forcing the tool restores
+  // the old behaviour, where every turn searched.
+  it('forces the tenant search tool on a chat message so retrieval is not left to the model', () => {
+    const withTool = { assistantId: '7', searchToolId: '1' };
+    expect(pinTenantFields({ message: 'hi' }, withTool, MESSAGE).forced_tool_id).toBe(1);
+  });
+
+  it('does not force a tool when the tenant has none configured', () => {
+    expect(pinTenantFields({ message: 'hi' }, tenant, MESSAGE).forced_tool_id).toBeUndefined();
+  });
+
+  it('never lets the client choose which tool runs', () => {
+    // forced_tool_id sets tool_choice=REQUIRED on the Onyx side, so accepting it
+    // from the browser would let a caller drive the assistant's tool use.
+    const withTool = { assistantId: '7', searchToolId: '1' };
+    expect(pinTenantFields({ message: 'hi', forced_tool_id: 99 }, withTool, MESSAGE).forced_tool_id).toBe(1);
+    expect(pinTenantFields({ message: 'hi', forced_tool_id: 99 }, tenant, MESSAGE).forced_tool_id).toBeUndefined();
+  });
+
+  it('does not force a tool on session creation, which runs no tools', () => {
+    const withTool = { assistantId: '7', searchToolId: '1' };
+    expect(pinTenantFields({}, withTool, SESSION).forced_tool_id).toBeUndefined();
+  });
+
   it('does not mutate the caller\u2019s object', () => {
     const original = { persona_id: 999 };
     pinTenantFields(original, tenant, SESSION);

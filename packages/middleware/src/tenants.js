@@ -11,6 +11,10 @@ export function rowToTenant(row) {
     assistantId: row.assistant_id,
     dailyTurnCap: row.daily_turn_cap,
     allowedOrigins: row.allowed_origins || [],
+    // Only overrides config when the column actually holds a value, so a
+    // deployment whose table predates the column can still set it in config
+    // rather than silently losing the forced tool.
+    ...(row.search_tool_id == null ? {} : { searchToolId: row.search_tool_id }),
   });
 }
 

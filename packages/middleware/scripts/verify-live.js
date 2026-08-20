@@ -30,6 +30,9 @@ if (!ANONYMOUS && !API_KEY) {
 const tenant = {
   tenantId: 'local',
   assistantId: ASSISTANT_ID,
+  // Exercises the real pinning path: the middleware forces this tool so
+  // retrieval happens on every turn rather than at the model's discretion.
+  ...(process.env.SEARCH_TOOL_ID ? { searchToolId: process.env.SEARCH_TOOL_ID } : {}),
   dailyTurnCap: 50,
   allowedOrigins: ['http://localhost'],
   rewakeUrl: '/_da/health',
