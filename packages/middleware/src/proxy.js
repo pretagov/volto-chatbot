@@ -17,6 +17,22 @@ export const ALLOWED_PATHS = new Set([
 
 const API_PREFIX = '/api';
 
+// What each allowlisted path resolves to on upgraded Onyx.
+//
+// The client-facing names are kept as they are: the frontend still calls
+// send-message and we are deliberately not editing it, so the old name is the
+// public contract here and the rename is an internal detail.
+//
+// Verified against the backend rather than the mock, which is what let the old
+// values survive: chat/send-message no longer exists at all, and health is
+// served from the root rather than under /api.
+const PATH_TARGETS = {
+  'chat/send-message': `${API_PREFIX}/chat/send-chat-message`,
+  'chat/create-chat-session': `${API_PREFIX}/chat/create-chat-session`,
+  'chat/create-chat-message-feedback': `${API_PREFIX}/chat/create-chat-message-feedback`,
+  health: '/health',
+};
+
 export function resolveOnyxPath(url) {
   const raw = String(url ?? '');
   if (!raw.startsWith('/_da/')) return null;
@@ -29,7 +45,8 @@ export function resolveOnyxPath(url) {
   if (path.includes('..') || path.includes('//') || path.includes(':')) return null;
   if (!ALLOWED_PATHS.has(path)) return null;
 
-  return query ? `${API_PREFIX}/${path}?${query}` : `${API_PREFIX}/${path}`;
+  const target = PATH_TARGETS[path];
+  return query ? `${target}?${query}` : target;
 }
 
 // Tenant-scoped fields always come from the tenant record; whatever the client

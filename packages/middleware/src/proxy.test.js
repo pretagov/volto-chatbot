@@ -4,10 +4,10 @@ import { resolveOnyxPath, pinTenantFields, ALLOWED_PATHS, forwardToOnyx } from '
 
 describe('resolveOnyxPath', () => {
   it('maps a proxied path onto the Onyx api prefix', () => {
-    expect(resolveOnyxPath('/_da/chat/send-message')).toBe('/api/chat/send-message');
+    expect(resolveOnyxPath('/_da/chat/create-chat-session')).toBe('/api/chat/create-chat-session');
   });
 
-  it('allows exactly the four documented paths', () => {
+  it('allows exactly the paths upgraded Onyx actually serves', () => {
     expect([...ALLOWED_PATHS].sort()).toEqual([
       'chat/create-chat-message-feedback',
       'chat/create-chat-session',
@@ -16,8 +16,20 @@ describe('resolveOnyxPath', () => {
     ]);
   });
 
+  it('maps the old send-message path onto the endpoint that now exists', () => {
+    // The frontend still calls send-message and we are deliberately not changing
+    // it, so the old name stays the public contract and the rename is internal.
+    expect(resolveOnyxPath('/_da/chat/send-message')).toBe('/api/chat/send-chat-message');
+  });
+
+  it('serves health from the root, not from under /api', () => {
+    // Upgraded Onyx exposes /health at the root; /api/health does not exist, so
+    // the rewake ping would 404.
+    expect(resolveOnyxPath('/_da/health')).toBe('/health');
+  });
+
   it('preserves a query string on an allowed path', () => {
-    expect(resolveOnyxPath('/_da/health?probe=1')).toBe('/api/health?probe=1');
+    expect(resolveOnyxPath('/_da/health?probe=1')).toBe('/health?probe=1');
   });
 
   it('refuses persona, which is a server-to-server call and not the client’s', () => {

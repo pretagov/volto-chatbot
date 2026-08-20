@@ -103,6 +103,79 @@ function createOnyxMock() {
     sendChunk();
   });
 
+  // --- Upgraded Onyx protocol -------------------------------------------------
+  // The real backend renamed the endpoint and replaced the wire format. The mock
+  // serving only the OLD contract is exactly why the suite stayed green while the
+  // deployed demo was broken, so it now serves what Onyx actually serves.
+
+  // Health lives at the ROOT on upgraded Onyx, not under /api.
+  router.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  router.post('/api/chat/send-chat-message', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    const message = (req.body && req.body.message) || '';
+    const packet = (obj) => JSON.stringify({ placement: { turn_index: 0 }, obj }) + '\n';
+
+    const packets = [
+      packet({ type: 'message_start', final_documents: [], pre_answer_processing_seconds: 0.1 }),
+
+      // TableRAG progress arrives as tool packets, not reasoning: it is a tool
+      // running SQL, not the model thinking.
+      packet({ type: 'custom_tool_start', tool_name: 'table_query', tool_id: 1 }),
+      packet({
+        type: 'custom_tool_args',
+        tool_name: 'table_query',
+        tool_args: { query: message },
+      }),
+      packet({
+        type: 'custom_tool_delta',
+        tool_name: 'table_query',
+        tool_id: 1,
+        response_type: 'progress',
+        data: { step: 'Searching through available documents' },
+      }),
+      packet({
+        type: 'custom_tool_delta',
+        tool_name: 'table_query',
+        tool_id: 1,
+        response_type: 'progress',
+        data: { step: 'Found relevant information in 1 document' },
+      }),
+
+      packet({
+        type: 'search_tool_documents_delta',
+        documents: [
+          {
+            document_id: 'doc-1',
+            semantic_identifier: 'Mock LECC document',
+            blurb: 'A mock document used by the test suite.',
+            link: 'https://example.test/doc-1',
+          },
+        ],
+      }),
+
+      packet({ type: 'message_delta', content: 'This is a mock answer' }),
+      packet({ type: 'message_delta', content: ' streamed in pieces.' }),
+      packet({ type: 'citation_info', citation_number: 1, document_id: 'doc-1' }),
+      packet({ type: 'stop', stop_reason: 'finished' }),
+    ];
+
+    let i = 0;
+    const tick = setInterval(() => {
+      if (i >= packets.length) {
+        clearInterval(tick);
+        return res.end();
+      }
+      res.write(packets[i]);
+      i += 1;
+    }, 10);
+  });
+
+
 // Feedback endpoint the widget calls through /_da/chat/create-chat-message-feedback.
 router.post('/api/chat/create-chat-message-feedback', (req, res) => {
   res.json({ success: true });

@@ -43,20 +43,23 @@ test.describe('Agent Thinking Display', () => {
     // Wait a bit for response to start
     await page.waitForTimeout(2000);
 
-    // Check if agent thinking appeared
+    // Agent thinking must appear. This used to be guarded by `if (hasThinking)`,
+    // which meant the assertions below never ran when it was missing and the test
+    // reported green regardless — so the auto-collapse behaviour was never
+    // actually verified.
     const hasThinking = await helper.hasAgentThinking();
+    expect(hasThinking).toBe(true);
 
-    if (hasThinking) {
-      // Wait for streaming to complete
-      await helper.waitForStreamingComplete();
+    // Wait for streaming to complete
+    await helper.waitForStreamingComplete();
 
-      // Agent thinking should auto-collapse
-      // Wait a bit for the auto-collapse animation
-      await page.waitForTimeout(500);
+    // Agent thinking should auto-collapse
+    // Wait a bit for the auto-collapse animation
+    await page.waitForTimeout(500);
 
-      const isExpanded = await helper.isAgentThinkingExpanded();
-      expect(isExpanded).toBe(false);
-    }
+    // It collapses rather than unmounting, so the steps stay available.
+    expect(await helper.hasAgentThinking()).toBe(true);
+    expect(await helper.isAgentThinkingExpanded()).toBe(false);
   });
 
   test('user can manually toggle agent thinking', async ({ page }) => {
