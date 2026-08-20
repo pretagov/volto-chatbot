@@ -150,3 +150,106 @@ describe('grounding against the mock', () => {
     expect(res.body.error).toBe('grounding unavailable');
   });
 });
+
+describe('protocol translation end to end', () => {
+  it('delivers the old flat format to the client from a new-protocol backend', async () => {
+    // The whole point: the backend speaks Packet envelopes, the components still
+    // parse answer_piece, and neither had to change.
+    __resetCache();
+    const res = await request(appWith())
+      .post('/_da/chat/send-message')
+      .set('Authorization', `Bearer ${token()}`)
+      .buffer(true)
+      .parse((response, callback) => {
+        let raw = '';
+        response.on('data', (chunk) => {
+          raw += chunk;
+        });
+        response.on('end', () => callback(null, raw));
+      })
+      .send({ message: 'what is this about' });
+
+    expect(res.status).toBe(200);
+
+    const packets = String(res.body)
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    // No Packet envelopes should survive translation.
+    expect(packets.every((p) => p.obj === undefined)).toBe(true);
+
+    // The answer arrives as answer_piece, in more than one piece.
+    const pieces = packets.filter((p) => p.answer_piece && !p.answer_type);
+    expect(pieces.length).toBeGreaterThan(1);
+    expect(pieces.map((p) => p.answer_piece).join('')).toMatch(/mock answer/i);
+
+    // TableRAG progress surfaces as agent sub-answers.
+    const steps = packets.filter((p) => p.answer_type === 'agent_sub_answer');
+    expect(steps.length).toBeGreaterThan(0);
+
+    // Documents and citations come through.
+    expect(packets.some((p) => p.top_documents)).toBe(true);
+    expect(packets.some((p) => p.citations)).toBe(true);
+  });
+
+  it('reaches the renamed endpoint without the client knowing', async () => {
+    __resetCache();
+    const res = await request(appWith())
+      .post('/_da/chat/send-message')
+      .set('Authorization', `Bearer ${token()}`)
+      .buffer(true)
+      .parse((response, callback) => {
+        let raw = '';
+        response.on('data', (c) => {
+          raw += c;
+        });
+        response.on('end', () => callback(null, raw));
+      })
+      .send({ message: 'hi' });
+
+    // A 404 here would mean it hit the old, now-missing endpoint.
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('tenant pinning under the new protocol', () => {
+  it('pins the assistant when the session is created, not when a message is sent', async () => {
+    // The new API has no persona field on SendMessageRequest — the assistant is
+    // fixed by the chat session. So pinning has to happen at session creation, or
+    // a caller could open a session against another tenant's assistant.
+    __resetCache();
+
+    let seenBody = null;
+    const recorder = express();
+    recorder.use(express.json());
+    recorder.post('/api/chat/create-chat-session', (req, res) => {
+      seenBody = req.body;
+      res.json({ chat_session_id: 'recorded' });
+    });
+    const server = await new Promise((resolve) => {
+      const s2 = recorder.listen(0, () => resolve(s2));
+    });
+    const recorderUrl = `http://127.0.0.1:${server.address().port}`;
+
+    const app = createApp({
+      secret: SECRET,
+      tenants: { get: async () => tenant },
+      redis: { incr: async () => 1, expire: async () => {} },
+      onyx: { baseUrl: recorderUrl, apiKey: 'k' },
+    });
+
+    await request(app)
+      .post('/_da/chat/create-chat-session')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ persona_id: 999, description: 'mine' });
+
+    await new Promise((resolve) => server.close(resolve));
+
+    // Whatever the client asked for, the tenant's assistant wins.
+    expect(seenBody).not.toBeNull();
+    expect(seenBody.persona_id).toBe(7);
+    expect(seenBody.description).toBe('mine');
+  });
+});

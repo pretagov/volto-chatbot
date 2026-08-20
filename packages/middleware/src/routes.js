@@ -4,6 +4,7 @@ import { admitTurn } from './metering.js';
 import { resolveOnyxPath, pinTenantFields, forwardToOnyx } from './proxy.js';
 import { getAuthHeaders } from './onyxAuth.js';
 import { callHalloumi } from './halloumi.js';
+import { translateRequest, createTranslateStream } from './protocol.js';
 
 const TOKEN_TTL_SECONDS = 60 * 60;
 
@@ -79,15 +80,24 @@ export function registerRoutes(app, deps) {
     }
 
     const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders(onyx)) };
+
+    // Pin the tenant first, then reshape for the new request model. Order matters:
+    // pinning must apply to the client's body, not to the translated one.
     const body =
-      req.method === 'POST' ? JSON.stringify(pinTenantFields(req.body, req.tenant)) : undefined;
+      req.method === 'POST'
+        ? JSON.stringify(translateRequest(pinTenantFields(req.body, req.tenant, onyxPath), onyxPath))
+        : undefined;
 
     const upstream = await fetch(`${onyx.baseUrl}${onyxPath}`, {
       method: req.method,
       headers,
       body,
     });
-    return forwardToOnyx(upstream, res, onyx);
+
+    // Only the chat turn streams the new packet protocol; the other allowlisted
+    // endpoints still return plain JSON.
+    const translate = onyxPath.includes('send-chat-message');
+    return forwardToOnyx(upstream, res, onyx, translate ? createTranslateStream() : null);
   });
 
   app.all('/_ha/*', authenticateProxy, async (req, res) => {

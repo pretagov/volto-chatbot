@@ -110,8 +110,15 @@ export function translatePacket(packet) {
   }
 }
 
-export function translateRequest(body) {
+export function translateRequest(body, onyxPath = '') {
   const source = body && typeof body === 'object' ? body : {};
+
+  // Session creation keeps its own shape — notably persona_id, which is where the
+  // tenant's assistant is pinned now that the message request has no persona.
+  if (onyxPath.includes('create-chat-session')) {
+    return { ...source };
+  }
+
   const request = { message: source.message ?? '' };
 
   // Fields the new SendMessageRequest still understands, forwarded when present.

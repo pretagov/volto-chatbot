@@ -50,15 +50,28 @@ export function resolveOnyxPath(url) {
 }
 
 // Tenant-scoped fields always come from the tenant record; whatever the client
-// sent is ignored. The assistant is client config in the reused components, so
-// without this a caller could point one tenant's endpoint at another's assistant.
-export function pinTenantFields(body, tenant) {
+// sent is ignored. Without this a caller could point one tenant's endpoint at
+// another tenant's assistant.
+//
+// WHERE this applies changed with the upgrade. The new SendMessageRequest carries
+// no persona at all — the assistant is fixed by the chat session — so pinning the
+// message body would silently do nothing. It has to happen when the session is
+// created.
+export function pinTenantFields(body, tenant, onyxPath = '') {
   if (!body || typeof body !== 'object') return body;
-  return {
-    ...body,
-    persona_id: tenant.assistantId,
-    alternate_assistant_id: tenant.assistantId,
-  };
+
+  if (onyxPath.includes('create-chat-session')) {
+    return {
+      ...body,
+      // persona_id is an int in ChatSessionCreationRequest; tenant records store
+      // the assistant id as text.
+      persona_id: Number(tenant.assistantId),
+    };
+  }
+
+  // Nothing tenant-scoped to pin on other endpoints: the session already decides
+  // which assistant answers.
+  return { ...body };
 }
 
 // Global fetch (undici) returns a Web ReadableStream, which has no .pipe or .on.
@@ -73,7 +86,7 @@ function toNodeStream(body) {
 
 // Streaming must stay incremental — the widget renders tokens as they arrive, so
 // buffering the whole answer here would make every reply appear at once.
-export async function forwardToOnyx(upstream, res, { apiKey } = {}) {
+export async function forwardToOnyx(upstream, res, { apiKey } = {}, translator = null) {
   if (apiKey) {
     res.set('Content-Type', upstream.headers.get('content-type') || 'application/json');
   } else if (upstream.headers.get('transfer-encoding') === 'chunked') {
@@ -82,8 +95,14 @@ export async function forwardToOnyx(upstream, res, { apiKey } = {}) {
     res.set('Content-Type', 'application/json');
   }
 
-  const body = toNodeStream(upstream.body);
+  const source = toNodeStream(upstream.body);
+
+  // A translator reshapes packets on the way through. It is still a pipe, so the
+  // response stays incremental — the widget renders tokens as they arrive.
+  const body = translator ? source.pipe(translator) : source;
+
   await new Promise((resolve, reject) => {
+    source.on('error', reject);
     body.on('error', reject);
     body.on('end', resolve);
     body.pipe(res);

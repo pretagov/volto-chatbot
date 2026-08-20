@@ -58,40 +58,44 @@ describe('resolveOnyxPath', () => {
 
 describe('pinTenantFields', () => {
   const tenant = { assistantId: '7' };
+  const SESSION = '/api/chat/create-chat-session';
+  const MESSAGE = '/api/chat/send-chat-message';
 
-  it('overrides a client-supplied assistant id', () => {
-    // The assistant is client config in the reused components, so proxying it
-    // unchanged would let one tenant's endpoint drive another's assistant.
-    const body = pinTenantFields({ message: 'hi', persona_id: '999' }, tenant);
-    expect(body.persona_id).toBe('7');
-  });
-
-  it('overrides alternate_assistant_id too', () => {
-    const body = pinTenantFields({ alternate_assistant_id: '999' }, tenant);
-    expect(body.alternate_assistant_id).toBe('7');
+  it('overrides a client-supplied persona when the session is created', () => {
+    // The new SendMessageRequest carries no persona — the assistant is fixed by
+    // the chat session — so this is the only place pinning can bite.
+    const body = pinTenantFields({ persona_id: 999 }, tenant, SESSION);
+    expect(body.persona_id).toBe(7);
   });
 
   it('pins the assistant even when the client omits it', () => {
-    const body = pinTenantFields({ message: 'hi' }, tenant);
-    expect(body.persona_id).toBe('7');
-    expect(body.alternate_assistant_id).toBe('7');
+    expect(pinTenantFields({ description: 'x' }, tenant, SESSION).persona_id).toBe(7);
   });
 
-  it('leaves the rest of the body alone', () => {
-    const body = pinTenantFields({ message: 'hi', chat_session_id: 'abc' }, tenant);
+  it('coerces the assistant id to a number, as the session model requires', () => {
+    expect(pinTenantFields({}, { assistantId: '7' }, SESSION).persona_id).toBe(7);
+  });
+
+  it('leaves the rest of the session body alone', () => {
+    const body = pinTenantFields({ description: 'mine' }, tenant, SESSION);
+    expect(body.description).toBe('mine');
+  });
+
+  it('has nothing to pin on a message, since the session already decides', () => {
+    const body = pinTenantFields({ message: 'hi' }, tenant, MESSAGE);
     expect(body.message).toBe('hi');
-    expect(body.chat_session_id).toBe('abc');
+    expect(body.persona_id).toBeUndefined();
   });
 
-  it('does not mutate the caller’s object', () => {
-    const original = { message: 'hi', persona_id: '999' };
-    pinTenantFields(original, tenant);
-    expect(original.persona_id).toBe('999');
+  it('does not mutate the caller\u2019s object', () => {
+    const original = { persona_id: 999 };
+    pinTenantFields(original, tenant, SESSION);
+    expect(original.persona_id).toBe(999);
   });
 
   it('passes non-object bodies through untouched', () => {
-    expect(pinTenantFields(undefined, tenant)).toBeUndefined();
-    expect(pinTenantFields('raw', tenant)).toBe('raw');
+    expect(pinTenantFields(undefined, tenant, SESSION)).toBeUndefined();
+    expect(pinTenantFields('raw', tenant, SESSION)).toBe('raw');
   });
 });
 
