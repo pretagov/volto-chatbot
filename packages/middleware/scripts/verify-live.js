@@ -96,6 +96,19 @@ try {
         process.env.QUESTION ||
         'Search the indexed documents and tell me what topics they cover.',
       chat_session_id: session.chat_session_id,
+      // Retrieval is the assistant's choice now, so these let the check probe
+      // whether forcing the search tool or switching model changes the outcome.
+      ...(process.env.FORCED_TOOL_ID
+        ? { forced_tool_id: Number(process.env.FORCED_TOOL_ID) }
+        : {}),
+      ...(process.env.MODEL
+        ? {
+            llm_override: {
+              model_provider: process.env.MODEL_PROVIDER,
+              model_version: process.env.MODEL,
+            },
+          }
+        : {}),
     }),
   });
   check('send-message reaches the renamed endpoint', answer.ok, `status ${answer.status}`);
