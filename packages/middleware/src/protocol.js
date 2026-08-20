@@ -121,7 +121,22 @@ export function translateRequest(body, onyxPath = '') {
 
   const request = { message: source.message ?? '' };
 
-  // Fields the new SendMessageRequest still understands, forwarded when present.
+  // Allowlist, not a denylist: SendMessageRequest carries fields that are unsafe to
+  // accept from a browser, and an allowlist means a field upstream adds later is
+  // excluded by default rather than forwarded until someone notices.
+  //
+  // Two must never be added, both load-bearing under anonymous access:
+  //
+  //   internal_search_filters — its document_set overrides the persona's. Onyx only
+  //     authorises that override for authenticated users; both check sites
+  //     (_build_index_filters, process_message) are guarded by `not user.is_anonymous`.
+  //     Since anonymous access makes every tenant's ACL identical, the persona's
+  //     document sets are the whole tenant boundary, and this field is the way past it.
+  //
+  //   chat_session_info — an embedded ChatSessionCreationRequest, persona_id included,
+  //     which would sidestep the pinning applied at create-chat-session.
+  //
+  // See protocol.test.js: both are covered by tests that fail if either is added here.
   for (const key of [
     'chat_session_id',
     'parent_message_id',

@@ -125,6 +125,33 @@ describe('translateRequest', () => {
   it('tolerates a missing body', () => {
     expect(translateRequest(undefined)).toEqual({ message: '' });
   });
+
+  // Under anonymous access every tenant's documents are public, so the ACL is the
+  // same for everyone and the persona's document sets are the ONLY thing keeping
+  // one tenant's widget out of another's corpus.
+  //
+  // Onyx does not defend that boundary for us. Both places that authorise a
+  // client-supplied document set — _build_index_filters and process_message —
+  // are guarded by `not user.is_anonymous`, so for an anonymous caller a supplied
+  // document set overrides the persona's with no access check whatsoever.
+  it('drops client-supplied search filters, which would override the persona document sets', () => {
+    const out = translateRequest({
+      message: 'hi',
+      internal_search_filters: { document_set: ['another-tenants-set'] },
+    });
+    expect(out.internal_search_filters).toBeUndefined();
+  });
+
+  // chat_session_info is a full ChatSessionCreationRequest embedded in the message
+  // request. Forwarding it would let a caller create a session against any persona
+  // and sidestep the pinning done at create-chat-session.
+  it('drops an embedded session creation request, which would carry its own persona', () => {
+    const out = translateRequest({
+      message: 'hi',
+      chat_session_info: { persona_id: 99999 },
+    });
+    expect(out.chat_session_info).toBeUndefined();
+  });
 });
 
 describe('createTranslateStream', () => {
