@@ -30,11 +30,34 @@ function packet(obj) {
   return `${JSON.stringify({ placement: {}, obj })}\n`;
 }
 
-// Onyx's streaming protocol, which the widget translates on the way in.
+// A grounded answer as Onyx actually streams one: the retrieved documents, the
+// prose, and the citations tying them together. An earlier version of this stub
+// sent an answer with no documents and no citations, which left the source cards
+// and citation markers - the whole point of a grounded assistant - untested.
+const DOCUMENTS = [
+  {
+    document_id: 'doc-paying',
+    semantic_identifier: 'Paying your Council Tax',
+    link: 'https://www.example.gov.uk/paying-your-council-tax',
+    blurb: 'Ways to settle your bill, including automatic monthly collection.',
+    source_type: 'web',
+  },
+  {
+    document_id: 'doc-bands',
+    semantic_identifier: 'Council Tax bands',
+    link: 'https://www.example.gov.uk/council-tax-bands',
+    blurb: 'How charges are banded for your area.',
+    source_type: 'web',
+  },
+];
+
 const ANSWER =
-  packet({ type: 'message_start', final_documents: [] }) +
+  packet({ type: 'search_tool_documents_delta', documents: DOCUMENTS }) +
+  packet({ type: 'message_start', final_documents: DOCUMENTS }) +
   packet({ type: 'message_delta', content: '## Paying\n\nUse **Direct Debit** ' }) +
-  packet({ type: 'message_delta', content: 'or pay online.' }) +
+  packet({ type: 'message_delta', content: 'or pay online. [[1]]()' }) +
+  packet({ type: 'citation_info', citation_number: 1, document_id: 'doc-paying' }) +
+  packet({ type: 'citation_info', citation_number: 2, document_id: 'doc-bands' }) +
   packet({ type: 'stop' });
 
 async function stubOnyx(page) {
@@ -60,9 +83,12 @@ function watchConsole(page) {
   const errors = [];
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
-    // The favicon 404 is the static server, not the widget.
-    if (message.text().includes('favicon')) return;
-    errors.push(message.text());
+    // The favicon 404 is the static server, not the widget - and the URL lives
+    // in location(), not in the message text, so matching on the text alone
+    // never filtered it.
+    const url = message.location()?.url ?? '';
+    if (url.includes('favicon')) return;
+    errors.push(`${message.text()} ${url}`.trim());
   });
   page.on('pageerror', (error) => errors.push(String(error)));
   return errors;
@@ -132,4 +158,81 @@ test('a starter prompt from the embed asks its question', async ({ page }) => {
   await page.getByRole('button', { name: 'Pay council tax' }).click();
   await expect(page.getByText('Direct Debit')).toBeVisible({ timeout: 20000 });
   expect(errors).toEqual([]);
+});
+
+
+test('shows the sources it answered from', async ({ page }) => {
+  // The retrieved documents have to reach the UI, not just the translator. This
+  // is what makes the answer checkable by a reader, and it was previously
+  // covered nowhere: the stub sent an answer with no documents at all.
+  const errors = watchConsole(page);
+  await stubOnyx(page);
+  await page.goto(WIDGET());
+
+  const input = page.locator('textarea[placeholder="Ask me anything…"]');
+  await input.fill('How do I pay?');
+  await input.press('Enter');
+
+  await expect(page.getByText('Direct Debit')).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole('link', { name: /Paying your Council Tax/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Council Tax bands/ })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('links each source to where it came from', async ({ page }) => {
+  await stubOnyx(page);
+  await page.goto(WIDGET());
+
+  const input = page.locator('textarea[placeholder="Ask me anything…"]');
+  await input.fill('How do I pay?');
+  await input.press('Enter');
+
+  const source = page.getByRole('link', { name: /Paying your Council Tax/ });
+  await expect(source).toBeVisible({ timeout: 20000 });
+  await expect(source).toHaveAttribute(
+    'href',
+    'https://www.example.gov.uk/paying-your-council-tax',
+  );
+});
+
+// Against the real deployment, opt-in.
+//
+// The stubbed tests above prove the widget handles the protocol we believe Onyx
+// speaks. This proves Onyx still speaks it - which is the failure mode that
+// started all of this: a mock serving a dead contract stayed green for months
+// while the deployed chat was broken.
+//
+// Opt-in because it needs the deployment awake, costs an inference call, and is
+// as slow as a real answer:
+//
+//   LIVE_ONYX=https://pg-demo-onyx.fly.dev LIVE_PERSONA=12 npm run test:browser
+const LIVE = process.env.LIVE_ONYX;
+
+test.describe('against the real Onyx', () => {
+  test.skip(!LIVE, 'set LIVE_ONYX to run');
+  test.setTimeout(180_000);
+
+  test('answers a real question with real sources', async ({ page }) => {
+    const errors = watchConsole(page);
+    const search = new URLSearchParams({
+      onyx: LIVE,
+      persona: process.env.LIVE_PERSONA || '12',
+      tool: process.env.LIVE_TOOL || '1',
+      open: '1',
+      chatTitle: 'Live check',
+    });
+    await page.goto(`/widget.html?${search}`);
+
+    const input = page.locator('textarea[placeholder="Ask me anything…"]');
+    await input.fill(process.env.LIVE_QUESTION || 'How do I pay my council tax?');
+    await input.press('Enter');
+
+    // A cited source card, which only appears if retrieval actually ran and the
+    // documents reached the UI. Asserting on the answer text would tie the test
+    // to whatever the model happens to say.
+    const sources = page.locator('a[href^="http"]');
+    await expect(sources.first()).toBeVisible({ timeout: 150_000 });
+    expect(await sources.count()).toBeGreaterThan(0);
+    expect(errors).toEqual([]);
+  });
 });
