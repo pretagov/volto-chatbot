@@ -103,6 +103,45 @@ async function ask(question) {
   fireEvent.keyDown(input, { key: 'Enter' });
 }
 
+describe('starter prompts from the embed', () => {
+  const withPrompts = {
+    ...config,
+    starterPrompts: [{ name: 'Pay council tax', message: 'How do I pay council tax?' }],
+    persona: { id: '12', starter_messages: [] },
+  };
+
+  const renderWithPrompts = () =>
+    render(
+      <ConfigProvider config={withPrompts}>
+        <App />
+      </ConfigProvider>,
+    );
+
+  it('renders a button for each prompt', async () => {
+    renderWithPrompts();
+    await waitFor(() => expect(screen.getByText('Pay council tax')).toBeTruthy(), {
+      timeout: 15000,
+    });
+  }, 20000);
+
+  it('asks the question when one is clicked', async () => {
+    // The prompts come from the embed rather than from a persona fetch, so this
+    // is the check that they survive the trip and actually submit.
+    renderWithPrompts();
+    const button = await screen.findByText('Pay council tax', {}, { timeout: 15000 });
+    fireEvent.click(button);
+
+    await waitFor(
+      () => {
+        const turn = requests.find((r) => r.url.includes('send-chat-message'));
+        expect(turn).toBeTruthy();
+        expect(JSON.parse(turn.body).message).toBe('How do I pay council tax?');
+      },
+      { timeout: 15000 },
+    );
+  }, 20000);
+});
+
 describe('the widget, end to end', () => {
   it('mounts without throwing', () => {
     // The icon crash killed the render before anything appeared, leaving an

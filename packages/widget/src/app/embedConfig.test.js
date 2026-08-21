@@ -31,8 +31,13 @@ describe('readEmbedConfig', () => {
   });
 
   it('collects a repeated parameter into a list', () => {
+    // Kept as a list, but as objects rather than the bare strings this
+    // originally asserted: StarterMessage renders nothing for a string.
     const config = readEmbedConfig(`${base}&starterPrompts=One&starterPrompts=Two`);
-    expect(config.starterPrompts).toEqual(['One', 'Two']);
+    expect(config.starterPrompts).toEqual([
+      { name: 'One', message: 'One' },
+      { name: 'Two', message: 'Two' },
+    ]);
   });
 
   it('carries the forced search tool through', () => {
@@ -66,5 +71,46 @@ describe('startOpen', () => {
 
   it('does not leak into the presentation config', () => {
     expect(readEmbedConfig(`${base}&open=1`).open).toBeUndefined();
+  });
+});
+
+describe('persona, supplied by the embed rather than fetched', () => {
+  it('builds a persona object so the components have one to read', () => {
+    // ChatWindow and EmptyState read persona?.name, ?.description, ?.id and
+    // ?.starter_messages. Onyx would serve those, but everything else about a
+    // demo travels in the embed, so these do too.
+    const persona = readEmbedConfig(`${base}&assistantName=B%26NES`).persona;
+    expect(persona.id).toBe('12');
+    expect(persona.name).toBe('B&NES');
+  });
+
+  it('carries a description for showAssistantDescription to render', () => {
+    const config = readEmbedConfig(`${base}&assistantDescription=Council+services`);
+    expect(config.persona.description).toBe('Council services');
+  });
+
+  it('turns starter prompts into the shape StarterMessage needs', () => {
+    // A bare string renders nothing: the component returns null unless name or
+    // message is set, and sends msg.message on click.
+    const config = readEmbedConfig(
+      `${base}&starterPrompts=Pay+council+tax&starterPrompts=Report+a+problem`,
+    );
+    expect(config.starterPrompts).toEqual([
+      { name: 'Pay council tax', message: 'Pay council tax' },
+      { name: 'Report a problem', message: 'Report a problem' },
+    ]);
+  });
+
+  it('offers the same prompts as the persona alternative path', () => {
+    // EmptyState falls back to persona.starter_messages when block prompts are
+    // disabled, so both routes show the same thing.
+    const config = readEmbedConfig(`${base}&starterPrompts=Pay+council+tax`);
+    expect(config.persona.starter_messages).toEqual(config.starterPrompts);
+  });
+
+  it('leaves the persona usable when nothing optional is supplied', () => {
+    const { persona } = readEmbedConfig(base);
+    expect(persona.id).toBe('12');
+    expect(persona.starter_messages).toEqual([]);
   });
 });

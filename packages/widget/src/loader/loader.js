@@ -6,7 +6,10 @@
 //
 //   Host-driven (data-auto="false") - nothing appears until the page asks:
 //     <script src=".../embed/loader.js" data-auto="false"
-//             data-onyx="https://onyx.example" data-persona="12"></script>
+//             data-onyx="https://onyx.example" data-persona="12"
+//             data-assistant-name="B&NES"
+//             data-starter-prompts="Pay council tax"
+//             data-starter-prompts="Report a problem"></script>
 //     <button onclick="PretagovChat.open()">Ask a question</button>
 //
 //   Self-contained - the loader supplies its own floating bubble:
