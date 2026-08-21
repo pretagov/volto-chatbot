@@ -48,11 +48,16 @@ for (const file of files) {
 // The add-on's stylesheet has to reach the bundle or the panel ships with
 // default serif type and no chrome - which looks like a broken page, not a
 // missing nicety, and nothing else here would catch it.
-const styled = cssFiles.some((file) => readFileSync(file, 'utf8').includes('.chat-window'));
-if (!styled) {
-  console.error('check-bundle: the chat stylesheet is missing from the bundle.');
-  console.error('  Expected .chat-window rules from ChatBlock/style.less.');
-  console.error('  Without it the panel renders unstyled.');
+// .chat-window comes from the add-on and arrives transitively, so checking only
+// for it passes even when the shell has no styles at all - which is exactly how
+// the panel shipped as unstyled markup. Check the shell's own classes too.
+const REQUIRED_STYLES = ['.chat-window', '.chat-panel', '.chat-launcher'];
+const allCss = cssFiles.map((file) => readFileSync(file, 'utf8')).join('\n');
+const missingStyles = REQUIRED_STYLES.filter((selector) => !allCss.includes(selector));
+if (missingStyles.length) {
+  console.error('check-bundle: stylesheet rules missing from the bundle:');
+  for (const selector of missingStyles) console.error(`  ${selector}`);
+  console.error('\nWithout them the widget renders as unstyled markup.');
   process.exit(1);
 }
 

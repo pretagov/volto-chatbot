@@ -6,10 +6,11 @@ import { readEmbedConfig } from './embedConfig.js';
 import { installFetchWrapper } from './fetchWrapper.js';
 import { installStorageGuard } from './storageGuard.js';
 
-// The add-on's stylesheet. In Volto the theme pulls this in; standalone,
-// nothing did, so the panel rendered with default serif type and no chrome.
-// It is self-contained LESS - its own variables, no Volto or Semantic imports.
+// The add-on styles the conversation; this styles the shell around it. Imported
+// explicitly rather than relied on transitively, so the dependency is visible.
 import '@eeacms/volto-chatbot/ChatBlock/style.less';
+import './shell.css';
+
 
 // Everything about this demo comes from the iframe's own URL, which the loader
 // built from the host page's data- attributes. One chat, one persona.
