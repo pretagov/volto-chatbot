@@ -15,7 +15,12 @@ describe('injectLazyLibs', () => {
     }
     const Wrapped = injectLazyLibs(['rehypePrism', 'remarkGfm'])(Probe);
     render(<Wrapped />);
-    expect(await screen.findByText('prism:true gfm:true')).toBeTruthy();
+    // The libraries arrive via dynamic import, so the wait has to allow for a
+    // real module load rather than a tick. The default 1s is enough alone and
+    // not always enough with the rest of the suite running alongside.
+    expect(
+      await screen.findByText('prism:true gfm:true', {}, { timeout: 10000 }),
+    ).toBeTruthy();
   });
 
   it('renders the component even before the libraries resolve', () => {

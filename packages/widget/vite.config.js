@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 import { transformWithEsbuild } from 'vite';
 import { readFile } from 'node:fs/promises';
-import { svgAsIconData } from './src/build/svgIcon.js';
+import { svgAsIconData } from './src/buildPlugins/svgIcon.js';
 
 // The add-on writes JSX inside .js files (utils.js and others). Volto's Babel
 // build allows that; Vite's esbuild pass rejects it before any plugin sees the
