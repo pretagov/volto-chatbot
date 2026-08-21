@@ -134,3 +134,62 @@ describe('createChatApi', () => {
     expect(typeof window.PretagovChat.toggle).toBe('function');
   });
 });
+
+describe('small screens', () => {
+  const setViewport = (width, height) => {
+    window.innerWidth = width;
+    window.innerHeight = height;
+  };
+
+  afterEach(() => setViewport(1024, 768));
+
+  it('never renders wider than the screen', () => {
+    // At 400px fixed the panel hung 45px off the left edge of a 375px phone,
+    // clipping the conversation.
+    setViewport(375, 667);
+    const chat = createChatApi(scriptTag());
+    chat.open();
+    expect(parseInt(frame().style.width, 10)).toBeLessThanOrEqual(375);
+  });
+
+  it('never renders taller than the screen', () => {
+    setViewport(375, 667);
+    const chat = createChatApi(scriptTag());
+    chat.open();
+    expect(parseInt(frame().style.height, 10)).toBeLessThanOrEqual(667);
+  });
+
+  it('goes edge to edge on a phone rather than floating a card', () => {
+    // A 20px margin on every side wastes scarce width and looks like a mistake
+    // at phone sizes; full-bleed is what a chat panel does there.
+    setViewport(375, 667);
+    const chat = createChatApi(scriptTag());
+    chat.open();
+    expect(frame().style.left).toBe('0px');
+    expect(frame().style.right).toBe('0px');
+  });
+
+  it('keeps the floating card on a desktop viewport', () => {
+    setViewport(1440, 900);
+    const chat = createChatApi(scriptTag());
+    chat.open();
+    expect(frame().style.width).toBe('400px');
+    expect(frame().style.right).toBe('20px');
+  });
+
+  it('shrinks to fit a short window instead of overflowing', () => {
+    setViewport(1440, 500);
+    const chat = createChatApi(scriptTag());
+    chat.open();
+    expect(parseInt(frame().style.height, 10)).toBeLessThanOrEqual(500);
+  });
+
+  it('re-fits when the window changes, as on rotation', () => {
+    setViewport(1440, 900);
+    const chat = createChatApi(scriptTag());
+    chat.open();
+    setViewport(375, 667);
+    window.dispatchEvent(new Event('resize'));
+    expect(parseInt(frame().style.width, 10)).toBeLessThanOrEqual(375);
+  });
+});

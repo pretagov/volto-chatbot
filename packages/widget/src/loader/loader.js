@@ -21,10 +21,41 @@ export const WIDGET_ORIGIN_ATTR = 'data-pretagov-chat';
 const LAUNCHER = { width: 72, height: 72 };
 const PANEL = { width: 400, height: 640 };
 const EDGE = 20;
+// Below this the panel takes the whole screen. A floating card inset by 20px a
+// side wastes scarce width on a phone and reads as a mistake rather than a
+// choice.
+const FULL_SCREEN_BELOW = 480;
 
 function applySize(frame, size) {
   frame.style.width = `${size.width}px`;
   frame.style.height = `${size.height}px`;
+}
+
+// The panel was a fixed 400x640, which is wider than a phone: on a 375px screen
+// it hung 45px off the left edge and clipped the conversation.
+function fitPanel(frame, position) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  if (vw <= FULL_SCREEN_BELOW) {
+    frame.style.position = 'fixed';
+    frame.style.inset = '0';
+    frame.style.left = '0px';
+    frame.style.right = '0px';
+    frame.style.top = '0px';
+    frame.style.bottom = '0px';
+    applySize(frame, { width: vw, height: vh });
+    return;
+  }
+
+  // Never larger than the space available, so a short or narrow window still
+  // gets a whole panel rather than a cropped one.
+  frame.style.inset = '';
+  applyPosition(frame, position);
+  applySize(frame, {
+    width: Math.min(PANEL.width, vw - EDGE * 2),
+    height: Math.min(PANEL.height, vh - EDGE * 2),
+  });
 }
 
 function applyPosition(frame, position) {
@@ -135,7 +166,7 @@ export function createChatApi(script) {
       // trigger; a bubble inside the iframe would be a second click.
       const url = buildWidgetUrl(script, { persona, open: '1' });
       frame = frameFor(script, url, position, layout);
-      if (layout !== 'sidebar') applySize(frame, PANEL);
+      if (layout !== 'sidebar') fitPanel(frame, position);
       document.body.appendChild(frame);
     }
 
@@ -156,7 +187,13 @@ export function createChatApi(script) {
     if (event.origin !== widgetOrigin) return;
     const type = event.data && typeof event.data === 'object' ? event.data.type : null;
     if (type === 'chat:close') hide();
-    else if (type === 'chat:open' && frame && layout !== 'sidebar') applySize(frame, PANEL);
+    else if (type === 'chat:open' && frame && layout !== 'sidebar') fitPanel(frame, position);
+  });
+
+  // Rotation and window resizes change what fits, and a panel sized for the old
+  // viewport is exactly the overflow this avoids.
+  window.addEventListener('resize', () => {
+    if (frame && open && layout !== 'sidebar') fitPanel(frame, position);
   });
 
   return {
@@ -196,8 +233,9 @@ export function boot(script = document.currentScript) {
     const type = event.data && typeof event.data === 'object' ? event.data.type : null;
     if (type === 'chat:open') {
       if (layout === 'sidebar') applySidebar(frame, position);
-      else applySize(frame, PANEL);
+      else fitPanel(frame, position);
     } else if (type === 'chat:close') {
+      frame.style.inset = '';
       applyPosition(frame, position);
       applySize(frame, LAUNCHER);
     }

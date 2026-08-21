@@ -236,3 +236,47 @@ test.describe('against the real Onyx', () => {
     expect(errors).toEqual([]);
   });
 });
+
+// Phone geometry, in a real browser.
+//
+// The panel was a fixed 400x640 with no media query anywhere, so on a 375px
+// screen it rendered 45px off the left edge with the conversation clipped.
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 375, height: 667 } });
+
+  test('fits the screen, with nothing off the edge', async ({ page }) => {
+    await stubOnyx(page);
+    await page.goto(WIDGET());
+
+    const box = await page.locator('.chat-panel').boundingBox();
+    expect(box.width).toBeLessThanOrEqual(375);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+  });
+
+  test('does not scroll the page sideways', async ({ page }) => {
+    await stubOnyx(page);
+    await page.goto(WIDGET());
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test('the input stays reachable with an answer on screen', async ({ page }) => {
+    // The conversation scrolls inside the panel; if it pushed the composer off
+    // the bottom instead, a phone user could read one answer and never ask again.
+    await stubOnyx(page);
+    await page.goto(WIDGET());
+
+    const input = page.locator('textarea').first();
+    await input.fill('How do I pay?');
+    await input.press('Enter');
+    await expect(page.getByText('Direct Debit')).toBeVisible({ timeout: 20000 });
+
+    // The placeholder becomes "Ask follow-up..." once there are messages, so
+    // this deliberately does not match on it.
+    const box = await input.boundingBox();
+    expect(box.y + box.height).toBeLessThanOrEqual(667);
+  });
+});
