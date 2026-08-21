@@ -52,3 +52,19 @@ describe('readEmbedConfig', () => {
     expect(readEmbedConfig(base).rewakeUrl.startsWith('/')).toBe(true);
   });
 });
+
+describe('startOpen', () => {
+  it('is off by default, so the bubble shows', () => {
+    expect(readEmbedConfig(base).startOpen).toBe(false);
+  });
+
+  it('is on when the loader opened it from the host page', () => {
+    // The host already has its own trigger, so a bubble inside the iframe would
+    // be a second click.
+    expect(readEmbedConfig(`${base}&open=1`).startOpen).toBe(true);
+  });
+
+  it('does not leak into the presentation config', () => {
+    expect(readEmbedConfig(`${base}&open=1`).open).toBeUndefined();
+  });
+});

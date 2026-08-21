@@ -13,7 +13,9 @@ function notifyParent(type) {
 
 export function App() {
   const config = useChatConfig();
-  const [open, setOpen] = useState(false);
+  // Opened directly when a host page's own trigger created this frame, so the
+  // visitor does not have to click a second time inside it.
+  const [open, setOpen] = useState(Boolean(config.startOpen));
 
   const handleOpen = useCallback(() => {
     setOpen(true);

@@ -12,6 +12,9 @@ import { DEFAULTS } from './defaults.js';
 const ONYX_URL = 'onyx';
 const PERSONA = 'persona';
 const SEARCH_TOOL = 'tool';
+// Set by the loader when a host page's own trigger opened the chat, so the panel
+// renders directly instead of showing a bubble the visitor must click again.
+const START_OPEN = 'open';
 
 function parseBoolean(value, fallback) {
   if (value == null) return fallback;
@@ -32,7 +35,7 @@ export function readEmbedConfig(search = globalThis.location?.search ?? '') {
 
   const presentation = {};
   for (const key of new Set(params.keys())) {
-    if (key === ONYX_URL || key === PERSONA || key === SEARCH_TOOL) continue;
+    if (key === ONYX_URL || key === PERSONA || key === SEARCH_TOOL || key === START_OPEN) continue;
     const fallback = DEFAULTS[key];
     // Typed off the default rather than guessed, so "false" and "0" mean what
     // they say instead of being truthy strings.
@@ -48,5 +51,6 @@ export function readEmbedConfig(search = globalThis.location?.search ?? '') {
     onyxBaseUrl,
     personaId,
     forcedToolId: params.get(SEARCH_TOOL),
+    startOpen: params.get(START_OPEN) === '1',
   };
 }
