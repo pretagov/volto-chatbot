@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 import { transformWithEsbuild } from 'vite';
+import { readFile } from 'node:fs/promises';
+import { svgAsIconData } from './src/build/svgIcon.js';
 
 // The add-on writes JSX inside .js files (utils.js and others). Volto's Babel
 // build allows that; Vite's esbuild pass rejects it before any plugin sees the
@@ -42,7 +44,7 @@ const SHARED_DEPS = [
 export default defineConfig({
   // The add-on writes JSX inside .js files (utils.js and others), which Volto's
   // Babel build allows and esbuild does not. Let the react plugin handle both.
-  plugins: [jsxInJs, react({ include: /\.(js|jsx)$/ })],
+  plugins: [svgAsIconData({ readFile }), jsxInJs, react({ include: /\.(js|jsx)$/ })],
   resolve: {
     alias: [
       { find: '@plone/volto/helpers/Loadable/Loadable', replacement: here('src/shims/loadable.jsx') },
