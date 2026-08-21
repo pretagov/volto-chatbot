@@ -15,6 +15,9 @@ const SEARCH_TOOL = 'tool';
 // Set by the loader when a host page's own trigger opened the chat, so the panel
 // renders directly instead of showing a bubble the visitor must click again.
 const START_OPEN = 'open';
+// Onyx's internal_search. Forced unless the embed opts out.
+const DEFAULT_SEARCH_TOOL_ID = '1';
+const OPT_OUT = new Set(['', 'none', 'off', '0', 'false']);
 // Presentation, but consumed as a persona rather than as loose settings.
 const ASSISTANT_NAME = 'assistantName';
 const ASSISTANT_DESCRIPTION = 'assistantDescription';
@@ -67,6 +70,22 @@ export function readEmbedConfig(search = globalThis.location?.search ?? '') {
     starter_messages: starterPrompts,
   };
 
+  // Retrieval is the assistant's choice under upgraded Onyx, and left to itself
+  // it answers plenty of questions from the model alone with no sources - which
+  // still looks like a working demo and is the opposite of a grounded one. So
+  // searching is the default here and has to be turned off deliberately.
+  //
+  // Onyx's internal_search is tool 1 on every deployment we run. Override with
+  // data-tool if that ever differs, or data-tool="none" to let the assistant
+  // decide.
+  const requestedTool = params.get(SEARCH_TOOL);
+  const forcedToolId =
+    requestedTool === null
+      ? DEFAULT_SEARCH_TOOL_ID
+      : OPT_OUT.has(requestedTool)
+        ? null
+        : requestedTool;
+
   return {
     ...DEFAULTS,
     ...presentation,
@@ -74,7 +93,7 @@ export function readEmbedConfig(search = globalThis.location?.search ?? '') {
     persona,
     onyxBaseUrl,
     personaId,
-    forcedToolId: params.get(SEARCH_TOOL),
+    forcedToolId,
     startOpen: params.get(START_OPEN) === '1',
   };
 }

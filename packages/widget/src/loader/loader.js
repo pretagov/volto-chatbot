@@ -10,6 +10,10 @@
 //             data-assistant-name="B&NES"
 //             data-starter-prompts="Pay council tax"
 //             data-starter-prompts="Report a problem"></script>
+//
+//   Retrieval is forced by default, so answers come from the persona's
+//   documents rather than the model. data-tool names a different tool id;
+//   data-tool="none" hands the choice back to the assistant.
 //     <button onclick="PretagovChat.open()">Ask a question</button>
 //
 //   Self-contained - the loader supplies its own floating bubble:

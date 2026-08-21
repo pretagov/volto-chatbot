@@ -137,7 +137,7 @@ test('sends the question to Onyx with the persona and tool pinned', async ({ pag
     if (request.url().includes(ONYX)) sent.push({ url: request.url(), body: request.postData() });
   });
 
-  await page.goto(WIDGET({ tool: '1' }));
+  await page.goto(WIDGET());
   const input = page.locator('textarea[placeholder="Ask me anything…"]');
   await input.fill('How do I pay?');
   await input.press('Enter');
@@ -146,6 +146,8 @@ test('sends the question to Onyx with the persona and tool pinned', async ({ pag
   const session = sent.find((r) => r.url.includes('create-chat-session'));
   expect(JSON.parse(session.body).persona_id).toBe(12);
 
+  // Forced by default: the demo is about grounded answers, so retrieval is not
+  // something an embed has to remember to switch on.
   const turn = sent.find((r) => r.url.includes('send-chat-message'));
   expect(JSON.parse(turn.body).forced_tool_id).toBe(1);
 });
@@ -279,4 +281,21 @@ test.describe('on a phone', () => {
     const box = await input.boundingBox();
     expect(box.y + box.height).toBeLessThanOrEqual(667);
   });
+});
+
+
+test('does not force a tool when the embed opts out', async ({ page }) => {
+  await stubOnyx(page);
+  const sent = [];
+  page.on('request', (r) => {
+    if (r.url().includes('send-chat-message')) sent.push(r.postData());
+  });
+
+  await page.goto(WIDGET({ tool: 'none' }));
+  const input = page.locator('textarea').first();
+  await input.fill('How do I pay?');
+  await input.press('Enter');
+  await expect(page.getByText('Direct Debit')).toBeVisible({ timeout: 20000 });
+
+  expect(JSON.parse(sent[0]).forced_tool_id).toBeUndefined();
 });

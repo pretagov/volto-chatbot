@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readEmbedConfig } from './embedConfig.js';
 import { DEFAULTS } from './defaults.js';
 
@@ -112,5 +112,23 @@ describe('persona, supplied by the embed rather than fetched', () => {
     const { persona } = readEmbedConfig(base);
     expect(persona.id).toBe('12');
     expect(persona.starter_messages).toEqual([]);
+  });
+});
+
+describe('forcing retrieval', () => {
+  it('forces the search tool by default', () => {
+    // Left to itself the assistant answers from the model with no sources,
+    // which looks like a working demo and is the opposite of a grounded one.
+    expect(readEmbedConfig(base).forcedToolId).toBe('1');
+  });
+
+  it('lets the embed name a different tool', () => {
+    expect(readEmbedConfig(`${base}&tool=7`).forcedToolId).toBe('7');
+  });
+
+  it('lets the embed opt out deliberately', () => {
+    for (const value of ['none', 'off', '0', '']) {
+      expect(readEmbedConfig(`${base}&tool=${value}`).forcedToolId).toBeNull();
+    }
   });
 });
