@@ -89,6 +89,8 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // jsdom has no layout, so the scroll APIs the chat uses do not exist.
+    setupFiles: ['./src/testSetup.js'],
     include: ['src/**/*.test.{js,jsx}'],
   },
 });

@@ -17,7 +17,19 @@ export function Panel({ onClose }) {
         </button>
       </header>
       <div className="chat-panel__body">
-        <ChatWindow {...config} persona={config.persona} placeholderPrompt={config.placeholderPrompt} />
+        {/*
+          `assistant` is what ChatWindow feeds to useBackendChat, and it is what
+          builds the chat controller that owns onSubmit. That controller is only
+          constructed when the id differs from the one already held, so leaving
+          it undefined means undefined !== undefined is false, no controller is
+          ever built, and every submit throws before a request is made.
+        */}
+        <ChatWindow
+          {...config}
+          assistant={config.personaId}
+          persona={config.persona}
+          placeholderPrompt={config.placeholderPrompt}
+        />
       </div>
     </div>
   );

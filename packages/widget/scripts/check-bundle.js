@@ -23,8 +23,11 @@ function walk(dir) {
 }
 
 let files;
+let cssFiles;
 try {
-  files = walk(DIST).filter((f) => f.endsWith('.js'));
+  const all = walk(DIST);
+  files = all.filter((f) => f.endsWith('.js'));
+  cssFiles = all.filter((f) => f.endsWith('.css'));
 } catch {
   console.error(`check-bundle: no build output at ${DIST} — run vite build first`);
   process.exit(1);
@@ -42,6 +45,17 @@ for (const file of files) {
   }
 }
 
+// The add-on's stylesheet has to reach the bundle or the panel ships with
+// default serif type and no chrome - which looks like a broken page, not a
+// missing nicety, and nothing else here would catch it.
+const styled = cssFiles.some((file) => readFileSync(file, 'utf8').includes('.chat-window'));
+if (!styled) {
+  console.error('check-bundle: the chat stylesheet is missing from the bundle.');
+  console.error('  Expected .chat-window rules from ChatBlock/style.less.');
+  console.error('  Without it the panel renders unstyled.');
+  process.exit(1);
+}
+
 if (offenders.length) {
   console.error('check-bundle: forbidden dependency reached the widget bundle:');
   for (const o of offenders) console.error(`  ${o}`);
@@ -49,4 +63,6 @@ if (offenders.length) {
   process.exit(1);
 }
 
-console.log(`check-bundle: ok (${files.length} bundle files, no forbidden dependencies)`);
+console.log(
+  `check-bundle: ok (${files.length} bundle files, no forbidden dependencies, stylesheet present)`,
+);

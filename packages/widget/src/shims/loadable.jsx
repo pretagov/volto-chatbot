@@ -22,7 +22,7 @@ export function injectLazyLibs(names) {
 
   return function wrap(Component) {
     function WithLazyLibs(props) {
-      const [libs, setLibs] = useState({});
+      const [libs, setLibs] = useState(null);
 
       useEffect(() => {
         let cancelled = false;
@@ -46,8 +46,13 @@ export function injectLazyLibs(names) {
         };
       }, []);
 
-      // Render immediately rather than blocking on the imports: the chat is
-      // usable before syntax highlighting is.
+      // Held back until the libraries resolve, which is the contract Volto
+      // provides and the components rely on. Rendering early looks like a
+      // harmless degradation and is not: these are passed straight into
+      // ReactMarkdown's plugin list, and unified rejects an undefined plugin
+      // with "Expected usable value", taking the answer down as it streams in.
+      if (!libs) return null;
+
       return <Component {...props} {...libs} />;
     }
 

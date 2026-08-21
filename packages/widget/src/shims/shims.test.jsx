@@ -10,8 +10,14 @@ describe('injectLazyLibs', () => {
   it('passes the named libraries to the wrapped component as props', async () => {
     // ChatWindow takes rehypePrism and remarkGfm as props, injected by this HOC
     // in Volto. Outside Volto the shell has to supply them the same way.
+    // Asserts they are USABLE, not merely truthy. A module namespace object is
+    // truthy and unified still rejects it, which is how a broken plugin got
+    // past this test and only surfaced as "Expected usable value" when an
+    // answer tried to render.
     function Probe({ rehypePrism, remarkGfm }) {
-      return <div>{`prism:${!!rehypePrism} gfm:${!!remarkGfm}`}</div>;
+      return (
+        <div>{`prism:${typeof rehypePrism === 'function'} gfm:${typeof remarkGfm === 'function'}`}</div>
+      );
     }
     const Wrapped = injectLazyLibs(['rehypePrism', 'remarkGfm'])(Probe);
     render(<Wrapped />);
@@ -23,31 +29,34 @@ describe('injectLazyLibs', () => {
     ).toBeTruthy();
   });
 
-  it('renders the component even before the libraries resolve', () => {
+  it('renders the component once the libraries resolve', async () => {
+    // Previously this asserted the opposite - that it rendered BEFORE they
+    // resolved - which is the defect: the wrapped component passes these
+    // straight into ReactMarkdown, and unified throws on an undefined plugin.
     function Probe() {
       return <div>rendered</div>;
     }
     const Wrapped = injectLazyLibs(['luxon'])(Probe);
     render(<Wrapped />);
-    expect(screen.getByText('rendered')).toBeTruthy();
+    expect(await screen.findByText('rendered', {}, { timeout: 10000 })).toBeTruthy();
   });
 
-  it('accepts a single name as a string, as Volto does', () => {
+  it('accepts a single name as a string, as Volto does', async () => {
     function Probe({ luxon }) {
       return <div>{`luxon:${luxon === undefined ? 'pending' : 'ready'}`}</div>;
     }
     const Wrapped = injectLazyLibs('luxon')(Probe);
     render(<Wrapped />);
-    expect(screen.getByText(/luxon:/)).toBeTruthy();
+    expect(await screen.findByText('luxon:ready', {}, { timeout: 10000 })).toBeTruthy();
   });
 
-  it('forwards the props it was given', () => {
+  it('forwards the props it was given', async () => {
     function Probe({ greeting }) {
       return <div>{greeting}</div>;
     }
     const Wrapped = injectLazyLibs(['luxon'])(Probe);
     render(<Wrapped greeting="hello" />);
-    expect(screen.getByText('hello')).toBeTruthy();
+    expect(await screen.findByText('hello', {}, { timeout: 10000 })).toBeTruthy();
   });
 });
 
@@ -89,5 +98,19 @@ describe('matomo', () => {
     // components import trackEvent, so it has to exist and be harmless.
     expect(() => trackEvent({ category: 'c', action: 'a' })).not.toThrow();
     expect(trackEvent({})).toBeUndefined();
+  });
+});
+
+describe('injectLazyLibs timing', () => {
+  it('renders nothing until the libraries have resolved', () => {
+    // The wrapped component receives these as ReactMarkdown plugins, and an
+    // undefined plugin is not a missing nicety - unified throws on it. Rendering
+    // early was what took the streamed answer down.
+    function Probe({ remarkGfm }) {
+      return <div>{`gfm:${typeof remarkGfm}`}</div>;
+    }
+    const Wrapped = injectLazyLibs(['remarkGfm'])(Probe);
+    const { container } = render(<Wrapped />);
+    expect(container.textContent).not.toContain('gfm:undefined');
   });
 });
