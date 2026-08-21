@@ -28,3 +28,7 @@ videos
 # Playwright test output
 /playwright-report
 /test-results
+
+# Playwright output from the widget's browser tests
+packages/widget/test-results/
+packages/widget/playwright-report/

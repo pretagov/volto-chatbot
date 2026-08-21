@@ -20,6 +20,15 @@ const jsxInJs = {
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 
 // Runtime packages the reused components import by bare specifier.
+//
+// unist-util-visit is deliberately NOT here. The alias below matches on the
+// bare specifier regardless of who is importing, and several markdown packages
+// need different majors of it: mdast-util-definitions@4 requires the v2
+// CommonJS build, whose module.exports IS the function, while the add-on itself
+// uses v5, which is pure ESM with named exports only. Forcing one copy handed
+// v5 to the v4 consumer, so `visit` came out undefined and every rendered
+// answer died on "is not a function". pnpm already resolves these correctly per
+// importer; the alias was overriding that.
 const SHARED_DEPS = [
   'semantic-ui-react',
   'react-dom',
@@ -29,7 +38,6 @@ const SHARED_DEPS = [
   '@loadable/component',
   'prop-types',
   'react-textarea-autosize',
-  'unist-util-visit',
   'highlight.js',
   'marked',
   'dequal',
@@ -75,6 +83,17 @@ export default defineConfig({
   // host root, and absolute /assets/ paths would resolve against that root.
   base: './',
   build: {
+    // react-markdown 6 pulls in mdast-util-definitions@4 and unist-util-visit@2,
+    // both CommonJS. Rollup's default interop hoisted the consumer above the
+    // provider, so `visit` was read before its module had run and every rendered
+    // answer died on "Ep is not a function".
+    //
+    // strictRequires wraps CJS modules and runs them on first require, which is
+    // the semantics they were written against, rather than guessing an order.
+    commonjsOptions: {
+      strictRequires: true,
+      transformMixedEsModules: true,
+    },
     outDir: 'dist',
     rollupOptions: {
       input: {
