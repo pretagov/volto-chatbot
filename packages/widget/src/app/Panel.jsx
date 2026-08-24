@@ -1,6 +1,7 @@
 import React from 'react';
 import ChatWindow from '@eeacms/volto-chatbot/ChatBlock/ChatWindow';
 import { useChatConfig } from './ConfigProvider.jsx';
+import { SourcesView } from './SourcesView.jsx';
 
 // The expanded state. ChatWindow is the add-on's component, imported in place and
 // unmodified — everything it needs that Volto used to provide comes from the
@@ -16,6 +17,8 @@ export function Panel({ onClose }) {
           ×
         </button>
       </header>
+      {/* Overlays the conversation when a message's "show all" is used. */}
+      <SourcesView />
       <div className="chat-panel__body">
         {/*
           `assistant` is what ChatWindow feeds to useBackendChat, and it is what
