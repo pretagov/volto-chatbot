@@ -557,6 +557,9 @@ export function useBackendChat({
     chatStateRef.current = chatState;
   }, [chatState]);
 
+  // Ref to track in-progress wake promise to avoid duplicate health checks
+  const wakePromiseRef = React.useRef(null);
+
   const rewakeDelayInMs =
     config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
   
@@ -567,10 +570,17 @@ export function useBackendChat({
     }
   }
 
-  /** Try to wake up the API. Will early return if already awake
+  /** Try to wake up the API. Will early return if already awake.
+   * Uses a shared promise to avoid duplicate health checks.
    * @param {*} currentChatState Value of `chatState`. Passed in to workaround stale React state.
+   * @returns {Promise<boolean>} True if wake was successful
    */
   async function wake(currentChatState) {
+    // If wake is already in progress, return the existing promise
+    if (wakePromiseRef.current) {
+      return wakePromiseRef.current;
+    }
+
     const readyForWaking =
       Date.now() - rewakeDelayInMs > localStorage.getItem("chat-last-awake");
     if (currentChatState === ChatState.ERRORED) {
@@ -590,23 +600,33 @@ export function useBackendChat({
     if (currentChatState !== ChatState.SUBMITTING) {
       setChatState(ChatState.WAKING);
     }
+    setIsWaking(true);
 
-    try {
-      const wakeResult = await wakeApi();
-      if (!!wakeResult) {
-        // Check the ACTUAL current state via ref, not the stale parameter
-        // This prevents setting state to READY if user submitted while wake was in progress
-        const actualCurrentState = chatStateRef.current;
-        if (actualCurrentState !== ChatState.SUBMITTING && actualCurrentState !== ChatState.STREAMING) {
-          setChatState(ChatState.READY);
+    // Create and store the wake promise
+    wakePromiseRef.current = (async () => {
+      try {
+        const wakeResult = await wakeApi();
+        if (!!wakeResult) {
+          // Check the ACTUAL current state via ref, not the stale parameter
+          // This prevents setting state to READY if user submitted while wake was in progress
+          const actualCurrentState = chatStateRef.current;
+          if (actualCurrentState !== ChatState.SUBMITTING && actualCurrentState !== ChatState.STREAMING) {
+            setChatState(ChatState.READY);
+          }
+          localStorage.setItem("chat-last-awake", Date.now());
+          return true;
         }
-        localStorage.setItem("chat-last-awake", Date.now());
-        return true;
+        return false;
+      } catch (err) {
+        setError(err.message);
+        return false;
+      } finally {
+        setIsWaking(false);
+        wakePromiseRef.current = null;
       }
-    } catch (err) {
-      setError(err.message);
-    }
-    return false;
+    })();
+
+    return wakePromiseRef.current;
   }
   React.useEffect(() => {
     if (chatState === ChatState.ASLEEP) {
@@ -684,18 +704,14 @@ export function useBackendChat({
     // Ensure backend is awake before submitting
     async function submitWithWake() {
       try {
-        // Always call wakeApi directly to ensure backend is healthy before submitting
-        setIsWaking(true);
-        const isAwake = await wakeApi();
-        setIsWaking(false);
+        // Use the shared wake function to avoid duplicate health checks
+        const isAwake = await wake(ChatState.SUBMITTING);
         if (!isAwake) {
           setError("Failed to connect to the chat backend. Please try again.");
           return;
         }
-        localStorage.setItem("chat-last-awake", Date.now());
         await onSubmit(messageToSubmit);
       } catch (errorReason) {
-        setIsWaking(false);
         setChatState(ChatState.ERRORED);
         setError(
           errorReason instanceof Error ? errorReason.message : errorReason,

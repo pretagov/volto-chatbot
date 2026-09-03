@@ -4,7 +4,7 @@ import { visit } from 'unist-util-visit';
 import loadable from '@loadable/component';
 import { Button, Message, MessageContent, Icon } from 'semantic-ui-react';
 import { trackEvent } from '@eeacms/volto-matomo/utils';
-import { SourceDetails } from './Source';
+import CompactSourceCard from './CompactSourceCard';
 import { SVGIcon, useCopyToClipboard } from './utils';
 import ChatMessageFeedback from './ChatMessageFeedback';
 import useQualityMarkers from './useQualityMarkers';
@@ -20,7 +20,6 @@ import CheckIcon from './../icons/check.svg';
 import GlassesIcon from './../icons/glasses.svg';
 
 import { sourcesForSelectedMessage } from "#stores/sidebarStore";
-import LinkIcon from "@plone/volto/icons/link.svg";
 import SearchIcon from "@plone/volto/icons/zoom.svg";
 
 const CITATION_MATCH = /\[\d+\](?![[(\])])/gm;
@@ -92,8 +91,17 @@ export function AgentThinking({ thinkingSteps, isStreaming }) {
 
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Don't render if no thinking steps or if streaming is complete
-  if (thinkingSteps.length === 0 || !isStreaming) {
+  // Collapse once the answer has arrived, rather than unmounting. The steps stay
+  // available behind the header so a reader can see how the answer was reached
+  // after the fact — which is the whole point of showing them.
+  useEffect(() => {
+    if (!isStreaming) {
+      setIsExpanded(false);
+    }
+  }, [isStreaming]);
+
+  // Nothing to show only when there are genuinely no steps.
+  if (thinkingSteps.length === 0) {
     return null;
   }
 
@@ -518,28 +526,37 @@ export function ChatMessageBubble(props) {
             );
           })()}
 
-          {/* Hide tool calls while loading - status replaces "Searched for:" */}
+          {/* Show tool calls after loading completes (not during streaming for most recent message) */}
           {showToolCalls && !(isMostRecent && isLoading) &&
             message.toolCalls?.map((info, index) => (
               <ToolCall key={index} {...info} thinkingSteps={message.agentThinking} />
             ))}
 
-          {Object.keys(documents).length > 0 &&
-            blockData.displayMode === 'sidebar' && (
-              <>
-                <Button
-                  onClick={() => {
-                    sourcesForSelectedMessage.set(documents);
-                  }}
-                  className="floated show-sources-button"
-                >
-                  <span aria-hidden="true">
-                    <SVGIcon name={LinkIcon} />
-                  </span>
-                  {`${Object.keys(documents).length} results`}
-                </Button>
-              </>
-            )}
+          {/* Document cards row - above the answer */}
+          {!isUser && (() => {
+            const docsArray = Array.isArray(documents) ? documents : Object.values(documents);
+            if (docsArray.length === 0) return null;
+            const displayDocs = sources.length > 0 ? sources : docsArray.slice(0, 3);
+            return (
+              <div className="document-cards-row">
+                {displayDocs.map((source, i) => (
+                  <CompactSourceCard
+                    key={i}
+                    source={source}
+                    index={sources.length > 0 ? source.index : i + 1}
+                  />
+                ))}
+                {/* Show All card - only visible when there are citations */}
+                {sources.length > 0 && (
+                  <CompactSourceCard
+                    variant="show-all"
+                    sources={docsArray}
+                    onClick={() => sourcesForSelectedMessage.set(docsArray)}
+                  />
+                )}
+              </div>
+            );
+          })()}
 
           <Markdown
             components={components(message, markers, stableContextSources)}
@@ -552,12 +569,6 @@ export function ChatMessageBubble(props) {
           {!isUser && showTotalFailMessage && (
             <Message color="red">{serializeNodes(totalFailMessage)}</Message>
           )}
-
-          <div className="sources">
-            {sources.map((source, i) => (
-              <SourceDetails source={source} key={i} index={source.index} />
-            ))}
-          </div>
 
           {!isUser && (
             <HalloumiFeedback
