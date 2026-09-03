@@ -10,8 +10,11 @@
  * Usage:
  *   node scripts/install-to-onyx.js [--onyx <path-to-onyx-checkout>]
  *
- * Defaults to the sibling search/onyx checkout, which is only a convenience —
- * pass --onyx once the add-on moves.
+ * The add-on is a submodule of the Onyx checkout, so the destination is three
+ * directories up and does not move. It used to be six levels up into a sibling
+ * checkout, which meant the source of the deployed widget lived somewhere the
+ * Onyx repo could not see: the built assets were committed with no source beside
+ * them, and the only record of how they related was a commit message.
  */
 import { existsSync, rmSync, mkdirSync, cpSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -21,10 +24,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, '..', 'dist');
 
 const flagIndex = process.argv.indexOf('--onyx');
+// scripts -> widget -> packages -> volto-chatbot -> <onyx>
 const onyxRoot =
   flagIndex !== -1
     ? resolve(process.argv[flagIndex + 1])
-    : resolve(here, '..', '..', '..', '..', '..', '..', 'search', 'onyx');
+    : resolve(here, '..', '..', '..', '..');
 
 // Namespaced rather than dropped at the root: public/ is an upstream directory
 // shared with Onyx's own assets, and the widget's file names are hashed.
