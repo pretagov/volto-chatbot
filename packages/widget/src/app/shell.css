@@ -156,6 +156,36 @@ body {
   padding: 0.75rem 1rem;
 }
 
+/* A flex item's automatic minimum size is its content, so the message column
+   refused to shrink below the widest thing in it - the cards row - and grew to
+   460px inside a 398px panel. The row then had nothing to scroll within: it was
+   overflowing its ancestor instead. Not the avatar, which needs its own size. */
+.chat-panel .comment > div:not(.circle) {
+  min-width: 0;
+}
+
+/* The sources are a sideways scroller, not a wrapped block. The cards are
+   200px and the panel is 400, so wrapping stacked them into rows that pushed
+   the answer down the frame - on a phone the same cards swipe. Widget only;
+   the Volto sidebar is wide enough that wrapping costs it nothing. */
+.chat-panel .document-cards-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  /* Room for the scrollbar, so it does not sit on the last card. */
+  padding-bottom: 4px;
+}
+
+/* Both the source cards and the "show all" control: neither may be squeezed to
+   fit, which is what would silently restore the wrap. */
+.chat-panel .document-cards-row > * {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
 /* All sources for a message. */
 /* A drawer over the conversation, not a replacement for it: the answer stays
    visible to its left, so a reader can map a citation to its source. Kept in

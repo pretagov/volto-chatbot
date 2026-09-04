@@ -181,6 +181,38 @@ test('shows the sources it answered from', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('the sources scroll sideways instead of wrapping', async ({ page }) => {
+  // At panel width the cards are wider than the frame. Wrapping turned them
+  // into a block of stacked rows that pushed the answer down the panel; a
+  // sideways scroller keeps them to one line and lets a reader swipe, which is
+  // what the same cards do on a phone.
+  await stubOnyx(page);
+  await page.setViewportSize({ width: 400, height: 640 });
+  await page.goto(WIDGET());
+
+  const input = page.locator('textarea[placeholder="Ask me anything…"]');
+  await input.fill('How do I pay?');
+  await input.press('Enter');
+  await expect(page.getByText('Direct Debit')).toBeVisible({ timeout: 20000 });
+
+  const layout = await page.evaluate(() => {
+    const row = document.querySelector('.document-cards-row');
+    const cards = [...row.children];
+    return {
+      cardCount: cards.length,
+      distinctRows: new Set(cards.map((c) => c.offsetTop)).size,
+      scrolls: row.scrollWidth > row.clientWidth,
+      overflowX: getComputedStyle(row).overflowX,
+    };
+  });
+
+  expect(layout.cardCount).toBeGreaterThan(1);
+  // One line: every card shares a top edge, however many there are.
+  expect(layout.distinctRows).toBe(1);
+  expect(layout.scrolls).toBe(true);
+  expect(['auto', 'scroll']).toContain(layout.overflowX);
+});
+
 test('links each source to where it came from', async ({ page }) => {
   await stubOnyx(page);
   await page.goto(WIDGET());
