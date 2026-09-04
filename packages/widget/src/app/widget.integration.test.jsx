@@ -42,9 +42,22 @@ function packetStream(packets) {
 
 let requests;
 let uninstall;
+// What the stubbed Onyx streams for the next turn. A test that needs a
+// different answer sets this rather than replacing globalThis.fetch, which the
+// fetch wrapper has already wrapped by the time a test body runs - reassigning
+// it there loses the /_da/ rewrite and every request falls through unmatched.
+let streamPackets;
+
+const PLAIN_ANSWER = [
+  { placement: {}, obj: { type: 'message_start', final_documents: [] } },
+  { placement: {}, obj: { type: 'message_delta', content: 'Pay online ' } },
+  { placement: {}, obj: { type: 'message_delta', content: 'or by direct debit.' } },
+  { placement: {}, obj: { type: 'stop' } },
+];
 
 beforeEach(() => {
   requests = [];
+  streamPackets = PLAIN_ANSWER;
   globalThis.fetch = vi.fn(async (url, init) => {
     requests.push({ url: String(url), body: init?.body, method: init?.method ?? 'GET' });
 
@@ -55,15 +68,7 @@ beforeEach(() => {
       });
     }
     if (String(url).includes('send-chat-message')) {
-      return new Response(
-        packetStream([
-          { placement: {}, obj: { type: 'message_start', final_documents: [] } },
-          { placement: {}, obj: { type: 'message_delta', content: 'Pay online ' } },
-          { placement: {}, obj: { type: 'message_delta', content: 'or by direct debit.' } },
-          { placement: {}, obj: { type: 'stop' } },
-        ]),
-        { status: 200 },
-      );
+      return new Response(packetStream(streamPackets), { status: 200 });
     }
     return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
@@ -215,5 +220,55 @@ describe('the widget, end to end', () => {
       },
       { timeout: 15000 },
     );
+  }, 20000);
+});
+
+describe('reaching every document behind an answer', () => {
+  // Checked against the live demo: the answer came back with three document
+  // cards and no way to the rest, because the control was gated on citations
+  // and that answer cited nothing. That is exactly when a reader wants to see
+  // what was read.
+  const DOCS = [1, 2, 3, 4, 5].map((n) => ({
+    document_id: `doc-${n}`,
+    semantic_identifier: `Report ${n}`,
+    link: `https://example.test/report-${n}`,
+    blurb: `Summary of report ${n}.`,
+  }));
+
+  const UNCITED_ANSWER = [
+    { placement: {}, obj: { type: 'message_start', final_documents: DOCS } },
+    // Deliberately uncited: retrieval found five documents and the answer
+    // names none of them.
+    { placement: {}, obj: { type: 'message_delta', content: 'I could not find that.' } },
+    { placement: {}, obj: { type: 'stop' } },
+  ];
+
+  it('offers a way to all of them even when the answer cites none', async () => {
+    streamPackets = UNCITED_ANSWER;
+    renderWidget();
+    await ask('anything');
+
+    await waitFor(
+      () => expect(document.querySelector('.show-all-card')).not.toBeNull(),
+      { timeout: 15000 },
+    );
+  }, 20000);
+
+  it('opens the panel on every document, not just the three shown', async () => {
+    streamPackets = UNCITED_ANSWER;
+    renderWidget();
+    await ask('anything');
+
+    await waitFor(
+      () => expect(document.querySelector('.show-all-card')).not.toBeNull(),
+      { timeout: 15000 },
+    );
+    fireEvent.click(document.querySelector('.show-all-card'));
+
+    await waitFor(() => {
+      const panel = document.querySelector('.chat-sources--open');
+      expect(panel).not.toBeNull();
+      expect(panel.querySelectorAll('.chat-sources__item')).toHaveLength(DOCS.length);
+    });
   }, 20000);
 });

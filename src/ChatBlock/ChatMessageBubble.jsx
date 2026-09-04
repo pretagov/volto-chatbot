@@ -546,8 +546,11 @@ export function ChatMessageBubble(props) {
                     index={sources.length > 0 ? source.index : i + 1}
                   />
                 ))}
-                {/* Show All card - only visible when there are citations */}
-                {sources.length > 0 && (
+                {/* The way to every retrieved document, not only the three
+                    shown. Gated on citations before, so an answer that cited
+                    nothing - which is exactly when a reader wants to check what
+                    it read - offered no way to the rest. */}
+                {(sources.length > 0 || docsArray.length > displayDocs.length) && (
                   <CompactSourceCard
                     variant="show-all"
                     sources={docsArray}
