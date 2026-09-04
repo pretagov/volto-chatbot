@@ -17,22 +17,25 @@ export function Panel({ onClose }) {
           ×
         </button>
       </header>
-      {/* Overlays the conversation when a message's "show all" is used. */}
-      <SourcesView />
-      <div className="chat-panel__body">
-        {/*
-          `assistant` is what ChatWindow feeds to useBackendChat, and it is what
-          builds the chat controller that owns onSubmit. That controller is only
-          constructed when the id differs from the one already held, so leaving
-          it undefined means undefined !== undefined is false, no controller is
-          ever built, and every submit throws before a request is made.
-        */}
-        <ChatWindow
-          {...config}
-          assistant={config.personaId}
-          persona={config.persona}
-          placeholderPrompt={config.placeholderPrompt}
-        />
+      <div className="chat-panel__row">
+        <div className="chat-panel__body">
+          {/*
+            `assistant` is what ChatWindow feeds to useBackendChat, and it is what
+            builds the chat controller that owns onSubmit. That controller is only
+            constructed when the id differs from the one already held, so leaving
+            it undefined means undefined !== undefined is false, no controller is
+            ever built, and every submit throws before a request is made.
+          */}
+          <ChatWindow
+            {...config}
+            assistant={config.personaId}
+            persona={config.persona}
+            placeholderPrompt={config.placeholderPrompt}
+          />
+        </div>
+        {/* Beside the conversation where the frame is wide enough for both, as
+            the Volto sidebar puts it; over the conversation where it is not. */}
+        <SourcesView />
       </div>
     </div>
   );

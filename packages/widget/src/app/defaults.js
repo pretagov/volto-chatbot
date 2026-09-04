@@ -23,7 +23,11 @@ export const DEFAULTS = {
   //
   // rewakeUrl MUST stay a path. The fetch wrapper matches on path prefix, so an
   // absolute URL would bypass the rewrite and never reach Onyx.
-  rewakeUrl: '/_da/health',
+  //
+  // ?wake=true is the whole point of the call: without it /health answers from
+  // the API server alone, and the database, index and model server each resume
+  // inside the visitor's first question instead of while they type.
+  rewakeUrl: '/_da/health?wake=true',
   rewakeDelay: 15,
 };
 

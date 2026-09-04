@@ -59,6 +59,14 @@ describe('installFetchWrapper', () => {
     expect(calls[0].url).toBe(`${ONYX}/api/chat/send-chat-message`);
   });
 
+  it('keeps the wake query, which is what makes the call worth making', async () => {
+    // /health alone answers from the API server and leaves the db, index and
+    // model server asleep until the visitor's first question needs them.
+    const calls = install();
+    await fetch('/_da/health?wake=true');
+    expect(calls[0].url).toBe(`${ONYX}/api/health?wake=true`);
+  });
+
   it('sends health where the deployment actually serves it', async () => {
     // Confirmed by calling it: /health is a 404, /api/health is the endpoint.
     const calls = install();

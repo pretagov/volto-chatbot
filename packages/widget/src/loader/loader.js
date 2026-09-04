@@ -24,6 +24,10 @@ export const WIDGET_ORIGIN_ATTR = 'data-pretagov-chat';
 
 const LAUNCHER = { width: 72, height: 72 };
 const PANEL = { width: 400, height: 640 };
+// The second column the widget asks for when a message's sources are opened.
+// The sidebar puts them beside the answer rather than over it, which needs room
+// the one-column panel does not have.
+const SOURCES_COLUMN = 320;
 const EDGE = 20;
 // Below this the panel takes the whole screen. A floating card inset by 20px a
 // side wastes scarce width on a phone and reads as a mistake rather than a
@@ -37,7 +41,7 @@ function applySize(frame, size) {
 
 // The panel was a fixed 400x640, which is wider than a phone: on a 375px screen
 // it hung 45px off the left edge and clipped the conversation.
-function fitPanel(frame, position) {
+function fitPanel(frame, position, extra = 0) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
@@ -57,7 +61,7 @@ function fitPanel(frame, position) {
   frame.style.inset = '';
   applyPosition(frame, position);
   applySize(frame, {
-    width: Math.min(PANEL.width, vw - EDGE * 2),
+    width: Math.min(PANEL.width + extra, vw - EDGE * 2),
     height: Math.min(PANEL.height, vh - EDGE * 2),
   });
 }
@@ -75,12 +79,12 @@ function applyPosition(frame, position) {
 }
 
 // Sidebar: full height against one edge, rather than a floating card.
-function applySidebar(frame, position) {
+function applySidebar(frame, position, extra = 0) {
   frame.style.position = 'fixed';
   frame.style.top = '0';
   frame.style.bottom = '0';
   frame.style.height = '100%';
-  frame.style.width = `${PANEL.width}px`;
+  frame.style.width = `${Math.min(PANEL.width + extra, window.innerWidth)}px`;
   if (position === 'left') {
     frame.style.left = '0';
     frame.style.right = '';
@@ -185,19 +189,35 @@ export function createChatApi(script) {
     open = false;
   }
 
+  // Held so a resize, or a later open, keeps the room the sources are using.
+  let extraWidth = 0;
+
+  function resize() {
+    if (!frame) return;
+    if (layout === 'sidebar') applySidebar(frame, position, extraWidth);
+    else fitPanel(frame, position, extraWidth);
+  }
+
   window.addEventListener('message', (event) => {
     // Any page can postMessage into this window, so anything not from the widget
     // origin is ignored outright.
     if (event.origin !== widgetOrigin) return;
     const type = event.data && typeof event.data === 'object' ? event.data.type : null;
     if (type === 'chat:close') hide();
-    else if (type === 'chat:open' && frame && layout !== 'sidebar') fitPanel(frame, position);
+    else if (type === 'chat:open') resize();
+    else if (type === 'chat:sources-open') {
+      extraWidth = SOURCES_COLUMN;
+      resize();
+    } else if (type === 'chat:sources-close') {
+      extraWidth = 0;
+      resize();
+    }
   });
 
   // Rotation and window resizes change what fits, and a panel sized for the old
   // viewport is exactly the overflow this avoids.
   window.addEventListener('resize', () => {
-    if (frame && open && layout !== 'sidebar') fitPanel(frame, position);
+    if (open) resize();
   });
 
   return {
@@ -232,16 +252,29 @@ export function boot(script = document.currentScript) {
   const frame = frameFor(script, buildWidgetUrl(script), position, layout);
   applySize(frame, LAUNCHER);
 
+  let extraWidth = 0;
+
+  function resize() {
+    if (layout === 'sidebar') applySidebar(frame, position, extraWidth);
+    else fitPanel(frame, position, extraWidth);
+  }
+
   window.addEventListener('message', (event) => {
     if (event.origin !== widgetOrigin) return;
     const type = event.data && typeof event.data === 'object' ? event.data.type : null;
     if (type === 'chat:open') {
-      if (layout === 'sidebar') applySidebar(frame, position);
-      else fitPanel(frame, position);
+      resize();
     } else if (type === 'chat:close') {
+      extraWidth = 0;
       frame.style.inset = '';
       applyPosition(frame, position);
       applySize(frame, LAUNCHER);
+    } else if (type === 'chat:sources-open') {
+      extraWidth = SOURCES_COLUMN;
+      resize();
+    } else if (type === 'chat:sources-close') {
+      extraWidth = 0;
+      resize();
     }
   });
 

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { sourcesForSelectedMessage } from '#stores/sidebarStore';
 import { getSourceDisplayName } from '@eeacms/volto-chatbot/ChatBlock/utils';
+import { notifyParent } from './frame.js';
 
 // Where the answer's "show all" control leads.
 //
@@ -19,6 +20,13 @@ export function SourcesView() {
   const sources = useStore(sourcesForSelectedMessage);
   const open = Boolean(sources && sources.length > 0);
   const close = useCallback(() => sourcesForSelectedMessage.set([]), []);
+
+  // The frame is sized for one column. Ask the loader for the second one, so
+  // the sources land beside the answer rather than over it; below the loader's
+  // full-screen breakpoint there is no room and the panel slides over instead.
+  useEffect(() => {
+    notifyParent(open ? 'chat:sources-open' : 'chat:sources-close');
+  }, [open]);
 
   // The list scrolls, so the close control can be out of view; Escape is the
   // way out that stays available.

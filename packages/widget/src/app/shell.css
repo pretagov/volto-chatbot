@@ -139,9 +139,18 @@ body {
   opacity: 0.75;
 }
 
+/* Conversation and sources sit side by side, as they do in the Volto sidebar. */
+.chat-panel__row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
 /* Scrolls internally so the header stays put. */
 .chat-panel__body {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 0.75rem 1rem;
@@ -172,6 +181,29 @@ body {
   transform: translateX(0);
   visibility: visible;
   transition: transform 0.22s ease, visibility 0s;
+}
+
+/* Wide enough for both: the sources take their own column and the answer keeps
+   its place, which is the sidebar's layout (chat, then a 44ch source pane).
+   Narrower than this the frame cannot hold two columns, so the rules above
+   stand and the panel slides over the conversation instead. */
+@media (min-width: 620px) {
+  .chat-sources {
+    position: static;
+    width: min(44ch, 45%);
+    transform: none;
+    visibility: visible;
+    box-shadow: none;
+    display: none;
+  }
+
+  .chat-sources--open {
+    display: flex;
+  }
+
+  .chat-sources__scrim {
+    display: none;
+  }
 }
 
 /* Dimmed conversation behind the drawer, and the tap target that closes it. */

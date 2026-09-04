@@ -55,7 +55,9 @@ const applyConfig = (config) => {
     rewakeUrl:
       process.env["RAZZLE_REWAKE_URL"] ||
       (typeof window !== "undefined" && window.env["RAZZLE_REWAKE_URL"]) ||
-      "/_da/health",
+      // ?wake=true reaches the db, index and model server too; without it only
+      // the API server resumes and the first question pays for the rest.
+      "/_da/health?wake=true",
     rewakeDelay:
       Number(
         process.env["RAZZLE_MINUTES_BEFORE_CHAT_REWAKE"] ||

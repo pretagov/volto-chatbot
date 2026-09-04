@@ -83,6 +83,27 @@ describe('postMessage handling', () => {
     expect(parseInt(frame.style.width, 10)).toBeLessThan(200);
   });
 
+  it('makes room for the sources rather than letting them cover the answer', () => {
+    // The panel is one column wide. The sidebar puts the sources beside the
+    // conversation, so opening them has to grow the frame.
+    boot(addScriptTag());
+    const frame = document.querySelector('iframe');
+    send({ type: 'chat:open' });
+    const oneColumn = parseInt(frame.style.width, 10);
+    send({ type: 'chat:sources-open' });
+    expect(parseInt(frame.style.width, 10)).toBeGreaterThan(oneColumn);
+  });
+
+  it('gives the room back when the sources close', () => {
+    boot(addScriptTag());
+    const frame = document.querySelector('iframe');
+    send({ type: 'chat:open' });
+    const oneColumn = parseInt(frame.style.width, 10);
+    send({ type: 'chat:sources-open' });
+    send({ type: 'chat:sources-close' });
+    expect(parseInt(frame.style.width, 10)).toBe(oneColumn);
+  });
+
   it('ignores messages from any other origin', () => {
     // Any page on the internet can postMessage into this frame, so the origin
     // check is what stops a hostile embedder driving the widget.

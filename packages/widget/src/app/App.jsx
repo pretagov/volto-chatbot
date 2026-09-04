@@ -2,14 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Launcher } from './Launcher.jsx';
 import { Panel } from './Panel.jsx';
 import { useChatConfig } from './ConfigProvider.jsx';
-
-// Tells the loader to resize the iframe. The loader owns geometry in the host
-// page; the widget only says which state it is in.
-function notifyParent(type) {
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type }, '*');
-  }
-}
+import { notifyParent } from './frame.js';
 
 export function App() {
   const config = useChatConfig();
