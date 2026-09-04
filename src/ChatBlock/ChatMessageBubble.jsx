@@ -532,7 +532,17 @@ export function ChatMessageBubble(props) {
               <ToolCall key={index} {...info} thinkingSteps={message.agentThinking} />
             ))}
 
-          {/* Document cards row - above the answer */}
+          <Markdown
+            components={components(message, markers, stableContextSources)}
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[addQualityMarkersPlugin]}
+          >
+            {addCitations(message.message)}
+          </Markdown>
+
+          {/* The sources, under the answer they support. Rendering them first put a
+              row of cards where the answer should be and pushed the answer down
+              the panel, which on a narrow frame is most of what a reader sees. */}
           {!isUser && (() => {
             const docsArray = Array.isArray(documents) ? documents : Object.values(documents);
             if (docsArray.length === 0) return null;
@@ -561,13 +571,6 @@ export function ChatMessageBubble(props) {
             );
           })()}
 
-          <Markdown
-            components={components(message, markers, stableContextSources)}
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[addQualityMarkersPlugin]}
-          >
-            {addCitations(message.message)}
-          </Markdown>
 
           {!isUser && showTotalFailMessage && (
             <Message color="red">{serializeNodes(totalFailMessage)}</Message>

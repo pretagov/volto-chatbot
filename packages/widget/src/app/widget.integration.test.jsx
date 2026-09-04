@@ -254,6 +254,32 @@ describe('reaching every document behind an answer', () => {
     );
   }, 20000);
 
+  it('lists the sources under the answer, not above it', async () => {
+    // The cards used to render before the answer, so the panel opened on a row
+    // of sources with the answer pushed below them. A citation belongs under
+    // what it supports.
+    streamPackets = UNCITED_ANSWER;
+    renderWidget();
+    await ask('anything');
+
+    // The documents arrive in the first packet and the answer streams after,
+    // so wait for both before comparing their order.
+    await waitFor(
+      () => {
+        expect(document.querySelector('.document-cards-row')).not.toBeNull();
+        expect(screen.getByText(/I could not find that/i)).toBeTruthy();
+      },
+      { timeout: 15000 },
+    );
+    const row = document.querySelector('.document-cards-row');
+    const answer = screen.getByText(/I could not find that/i);
+
+    // PRECEDING means the answer comes before the row in document order.
+    expect(
+      row.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
+  }, 20000);
+
   it('opens the panel on every document, not just the three shown', async () => {
     streamPackets = UNCITED_ANSWER;
     renderWidget();
