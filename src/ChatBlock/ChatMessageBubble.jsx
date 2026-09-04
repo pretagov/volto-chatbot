@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { visit } from 'unist-util-visit';
 import loadable from '@loadable/component';
-import { Button, Message, MessageContent } from 'semantic-ui-react';
+import { Button, Message, MessageContent, Icon } from 'semantic-ui-react';
 import { trackEvent } from '@eeacms/volto-matomo/utils';
-import { SourceDetails } from './Source';
+import CompactSourceCard from './CompactSourceCard';
 import { SVGIcon, useCopyToClipboard } from './utils';
 import ChatMessageFeedback from './ChatMessageFeedback';
 import useQualityMarkers from './useQualityMarkers';
@@ -19,7 +20,7 @@ import CheckIcon from './../icons/check.svg';
 import GlassesIcon from './../icons/glasses.svg';
 
 import { sourcesForSelectedMessage } from "#stores/sidebarStore";
-import LinkIcon from "@plone/volto/icons/link.svg";
+import SearchIcon from "@plone/volto/icons/zoom.svg";
 
 const CITATION_MATCH = /\[\d+\](?![[(\])])/gm;
 
@@ -43,17 +44,133 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-export function ToolCall({ tool_args, tool_name }) {
-  // , tool_result
+export function ToolCall({ tool_args, tool_name, thinkingSteps = [] }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (tool_name === 'run_search') {
+    const hasSteps = thinkingSteps.length > 0;
     return (
       <div className="tool_info">
-        Searched for: <em>{tool_args?.query || ''}</em>
+        <span>Searched for: <em>{tool_args?.query || ''}</em></span>
+        {hasSteps && (
+          <>
+            <button
+              className="steps-toggle"
+              onClick={() => setIsExpanded(!isExpanded)}
+              aria-expanded={isExpanded}
+              aria-label={isExpanded ? 'Hide steps' : 'Show steps'}
+              aria-controls="search-steps-content"
+            >
+              <Icon name={isExpanded ? 'chevron up' : 'chevron down'} size="small" />
+            </button>
+            {isExpanded && (
+              <div id="search-steps-content" className="search-steps">
+                {thinkingSteps.map((step, idx) => (
+                  <div key={idx} className="search-step">
+                    {step}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     );
   }
   return null;
 }
+
+export function AgentThinking({ thinkingSteps, isStreaming }) {
+  // Fail loudly if invalid props
+  if (!Array.isArray(thinkingSteps)) {
+    throw new Error('AgentThinking: thinkingSteps must be an array');
+  }
+  if (typeof isStreaming !== 'boolean') {
+    throw new Error('AgentThinking: isStreaming must be a boolean');
+  }
+
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  // Collapse once the answer has arrived, rather than unmounting. The steps stay
+  // available behind the header so a reader can see how the answer was reached
+  // after the fact — which is the whole point of showing them.
+  useEffect(() => {
+    if (!isStreaming) {
+      setIsExpanded(false);
+    }
+  }, [isStreaming]);
+
+  // Nothing to show only when there are genuinely no steps.
+  if (thinkingSteps.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="agent-thinking">
+      <div
+        className="thinking-header"
+        onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-controls="thinking-steps-content"
+      >
+        <Icon name={isExpanded ? 'chevron down' : 'chevron right'} />
+        <span>Agent thinking ({thinkingSteps.length} steps)</span>
+      </div>
+      {isExpanded && (
+        <div id="thinking-steps-content" className="thinking-steps">
+          {thinkingSteps.map((step, idx) => (
+            <div key={idx} className="thinking-step">
+              {step}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+AgentThinking.propTypes = {
+  thinkingSteps: PropTypes.array.isRequired,
+  isStreaming: PropTypes.bool.isRequired,
+};
+
+function getStatusText(agentStep, documentCount, isWaking) {
+  if (isWaking) return "Warming up...";
+  if (agentStep) return agentStep;
+  if (documentCount > 0) return `Generating response from ${documentCount} documents...`;
+  // "Thinking..." until we get the query from the response
+  return "Thinking...";
+}
+
+export function PendingResponseBubble({ latestAgentStep, documentCount, isWaking }) {
+  const statusText = getStatusText(latestAgentStep, documentCount, isWaking);
+
+  return (
+    <div className="comment comment--assistant">
+      <div className="circle assistant" aria-hidden="true">
+        <SVGIcon name={BotIcon} size="20" color="white" />
+      </div>
+      <div className="message-status">
+        <SVGIcon name={SearchIcon} size="16" />
+        <span>{statusText}</span>
+      </div>
+    </div>
+  );
+}
+
+PendingResponseBubble.propTypes = {
+  latestAgentStep: PropTypes.string,
+  documentCount: PropTypes.number,
+  isWaking: PropTypes.bool,
+};
 
 function addQualityMarkersPlugin() {
   return function (tree) {
@@ -231,7 +348,7 @@ export function ChatMessageBubble(props) {
   const {
     message,
     isLoading,
-    // isMostRecent,
+    isMostRecent,
     libs,
     onChoice,
     showToolCalls,
@@ -248,6 +365,9 @@ export function ChatMessageBubble(props) {
     enableMatomoTracking,
     persona,
     blockData,
+    latestAgentStep,
+    documentCount,
+    isWaking,
   } = props;
   const { remarkGfm } = libs; // , rehypePrism
   const { citations = {}, documents = [], type } = message;
@@ -375,7 +495,7 @@ export function ChatMessageBubble(props) {
 
   return (
     <div>
-      <div className="comment">
+      <div className={`comment ${isUser ? 'comment--user' : 'comment--assistant'}`}>
         {isUser ? (
           <div className="circle user">
             <SVGIcon name={UserIcon} size="20" color="white" />
@@ -386,27 +506,31 @@ export function ChatMessageBubble(props) {
           </div>
         )}
         <div>
-          {showToolCalls &&
-            message.toolCalls?.map((info, index) => (
-              <ToolCall key={index} {...info} />
-            ))}
+          {/* Show status when this is the most recent assistant message and still loading */}
+          {!isUser && isMostRecent && isLoading && (() => {
+            const searchQuery = message.query || message.toolCalls?.[0]?.tool_args?.query;
+            const statusText = isWaking
+              ? 'Warming up...'
+              : latestAgentStep
+                ? latestAgentStep
+                : documentCount > 0
+                  ? `Generating response from ${documentCount} documents...`
+                  : searchQuery
+                    ? `Searching for: ${searchQuery}`
+                    : 'Thinking...';
+            return (
+              <div className="message-status">
+                <SVGIcon name={SearchIcon} size="16" />
+                <span>{statusText}</span>
+              </div>
+            );
+          })()}
 
-          {Object.keys(documents).length > 0 &&
-            blockData.displayMode === 'sidebar' && (
-              <>
-                <Button
-                  onClick={() => {
-                    sourcesForSelectedMessage.set(documents);
-                  }}
-                  className="floated show-sources-button"
-                >
-                  <span aria-hidden="true">
-                    <SVGIcon name={LinkIcon} />
-                  </span>
-                  {`${Object.keys(documents).length} results`}
-                </Button>
-              </>
-            )}
+          {/* Show tool calls after loading completes (not during streaming for most recent message) */}
+          {showToolCalls && !(isMostRecent && isLoading) &&
+            message.toolCalls?.map((info, index) => (
+              <ToolCall key={index} {...info} thinkingSteps={message.agentThinking} />
+            ))}
 
           <Markdown
             components={components(message, markers, stableContextSources)}
@@ -416,15 +540,41 @@ export function ChatMessageBubble(props) {
             {addCitations(message.message)}
           </Markdown>
 
+          {/* The sources, under the answer they support. Rendering them first put a
+              row of cards where the answer should be and pushed the answer down
+              the panel, which on a narrow frame is most of what a reader sees. */}
+          {!isUser && (() => {
+            const docsArray = Array.isArray(documents) ? documents : Object.values(documents);
+            if (docsArray.length === 0) return null;
+            const displayDocs = sources.length > 0 ? sources : docsArray.slice(0, 3);
+            return (
+              <div className="document-cards-row">
+                {displayDocs.map((source, i) => (
+                  <CompactSourceCard
+                    key={i}
+                    source={source}
+                    index={sources.length > 0 ? source.index : i + 1}
+                  />
+                ))}
+                {/* The way to every retrieved document, not only the three
+                    shown. Gated on citations before, so an answer that cited
+                    nothing - which is exactly when a reader wants to check what
+                    it read - offered no way to the rest. */}
+                {(sources.length > 0 || docsArray.length > displayDocs.length) && (
+                  <CompactSourceCard
+                    variant="show-all"
+                    sources={docsArray}
+                    onClick={() => sourcesForSelectedMessage.set(docsArray)}
+                  />
+                )}
+              </div>
+            );
+          })()}
+
+
           {!isUser && showTotalFailMessage && (
             <Message color="red">{serializeNodes(totalFailMessage)}</Message>
           )}
-
-          <div className="sources">
-            {sources.map((source, i) => (
-              <SourceDetails source={source} key={i} index={source.index} />
-            ))}
-          </div>
 
           {!isUser && (
             <HalloumiFeedback

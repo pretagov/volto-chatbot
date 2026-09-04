@@ -122,6 +122,8 @@ class SubmitHandler {
     qgenAsistantId,
     enableQgen,
     setError,
+    setLatestAgentStep,
+    setDocumentCount,
     signal,
   }) {
     this.persona = persona;
@@ -131,6 +133,8 @@ class SubmitHandler {
     this.qgenAsistantId = qgenAsistantId;
     this.enableQgen = enableQgen;
     this.setError = setError;
+    this.setLatestAgentStep = setLatestAgentStep;
+    this.setDocumentCount = setDocumentCount;
 
     this.onSubmit = this.onSubmit.bind(this);
     this.abortSignal = signal || null;
@@ -256,6 +260,10 @@ class SubmitHandler {
     const _res = upsertToCompleteMessageMap(info);
     const { messageMap: frozenMessageMap, sessionId: frozenSessionId } = _res;
 
+    // Immediately show the user message
+    this.messageHistory = buildLatestMessageChain(frozenMessageMap);
+    this.completeMessageDetail = _res;
+
     // on initial message send, we insert a dummy system message
     // set this as the parent here if no parent is set
     if (!parentMessage && frozenMessageMap.size === 2) {
@@ -266,8 +274,11 @@ class SubmitHandler {
     const currentAssistantId = this.persona;
 
     this.setChatState(ChatState.STREAMING);
+    this.setLatestAgentStep(null);  // Clear previous agent step
+    this.setDocumentCount(0);  // Clear previous document count
 
     let answer = '';
+    let agentThinking = [];
     let query = null;
     let retrievalType = RetrievalType.None;
     let documents = []; // selectedDocuments;
@@ -355,7 +366,33 @@ class SubmitHandler {
           // });
 
           if (Object.hasOwn(packet, 'answer_piece')) {
-            answer += packet.answer_piece;
+            // Check if this is agent thinking or the actual answer
+            if (packet.answer_type === 'agent_sub_answer') {
+              console.log('[AGENT THINKING] agent_sub_answer:', packet.answer_piece);
+              agentThinking.push(packet.answer_piece);
+              this.setLatestAgentStep(packet.answer_piece);  // Update status immediately
+            } else {
+              // Extract thinking tags from reasoning models (<think> or <thinking>)
+              const thinkingRegex = /<think(?:ing)?>([\s\S]*?)<\/think(?:ing)?>/gi;
+              let piece = packet.answer_piece;
+              let match;
+
+              while ((match = thinkingRegex.exec(packet.answer_piece)) !== null) {
+                console.log('[AGENT THINKING] thinking tag:', match[1].trim());
+                agentThinking.push(match[1].trim());
+                // Remove the thinking tags from the answer piece
+                piece = piece.replace(match[0], '');
+              }
+
+              // Add the remaining content (without thinking tags) to the answer
+              if (piece.trim()) {
+                answer += piece;
+              }
+            }
+          } else if (Object.hasOwn(packet, 'agent_piece')) {
+            console.log('[AGENT THINKING] agent_piece:', packet.agent_piece);
+            agentThinking.push(packet.agent_piece);
+            this.setLatestAgentStep(packet.agent_piece);  // Update status immediately
           } else if (Object.hasOwn(packet, 'top_documents')) {
             documents = packet.top_documents;
             query = packet.rephrased_query;
@@ -364,6 +401,7 @@ class SubmitHandler {
               // point to the latest message (we don't know the messageId yet, which is why
               // we have to use -1)
               // setSelectedMessageForDocDisplay(TEMP_USER_MESSAGE_ID);
+              this.setDocumentCount(documents.length);  // Update document count for status
             }
           } else if (Object.hasOwn(packet, 'tool_name')) {
             toolCalls = [
@@ -415,6 +453,10 @@ class SubmitHandler {
               citations: finalMessage?.citations || {},
               files: finalMessage?.files || aiMessageImages || [],
               toolCalls: finalMessage?.tool_calls || toolCalls,
+              agentThinking: (() => {
+                console.log('[AGENT THINKING] Setting agentThinking:', agentThinking.length, 'steps');
+                return agentThinking;
+              })(),
               parentMessageId: newUserMessageId,
               alternateAssistantID: null, // alternativeAssistant?.id,
             },
@@ -504,6 +546,19 @@ export function useBackendChat({
   const [chatState, setChatState] = React.useState(ChatState.AWAITING_START);
   const [messageHistory, setMessageHistory] = React.useState([]);
   const [messageToSubmit, setMessageToSubmit] = React.useState(null);
+  const [lastSubmittedMessage, setLastSubmittedMessage] = React.useState('');
+  const [latestAgentStep, setLatestAgentStep] = React.useState(null);
+  const [documentCount, setDocumentCount] = React.useState(0);
+  const [isWaking, setIsWaking] = React.useState(false);
+
+  // Ref to track actual current state for async operations
+  const chatStateRef = React.useRef(chatState);
+  React.useEffect(() => {
+    chatStateRef.current = chatState;
+  }, [chatState]);
+
+  // Ref to track in-progress wake promise to avoid duplicate health checks
+  const wakePromiseRef = React.useRef(null);
 
   const rewakeDelayInMs =
     config.settings["volto-chatbot"].rewakeDelay * 60 * 1000;
@@ -515,10 +570,17 @@ export function useBackendChat({
     }
   }
 
-  /** Try to wake up the API. Will early return if already awake
+  /** Try to wake up the API. Will early return if already awake.
+   * Uses a shared promise to avoid duplicate health checks.
    * @param {*} currentChatState Value of `chatState`. Passed in to workaround stale React state.
+   * @returns {Promise<boolean>} True if wake was successful
    */
   async function wake(currentChatState) {
+    // If wake is already in progress, return the existing promise
+    if (wakePromiseRef.current) {
+      return wakePromiseRef.current;
+    }
+
     const readyForWaking =
       Date.now() - rewakeDelayInMs > localStorage.getItem("chat-last-awake");
     if (currentChatState === ChatState.ERRORED) {
@@ -538,21 +600,33 @@ export function useBackendChat({
     if (currentChatState !== ChatState.SUBMITTING) {
       setChatState(ChatState.WAKING);
     }
+    setIsWaking(true);
 
-    try {
-      const wakeResult = await wakeApi();
-      if (!!wakeResult) {
-        // We want to make sure we know when we're in a submitting and awake state vs just being ready to accept submission
-        if (currentChatState !== ChatState.SUBMITTING) {
-          setChatState(ChatState.READY);
+    // Create and store the wake promise
+    wakePromiseRef.current = (async () => {
+      try {
+        const wakeResult = await wakeApi();
+        if (!!wakeResult) {
+          // Check the ACTUAL current state via ref, not the stale parameter
+          // This prevents setting state to READY if user submitted while wake was in progress
+          const actualCurrentState = chatStateRef.current;
+          if (actualCurrentState !== ChatState.SUBMITTING && actualCurrentState !== ChatState.STREAMING) {
+            setChatState(ChatState.READY);
+          }
+          localStorage.setItem("chat-last-awake", Date.now());
+          return true;
         }
-        localStorage.setItem("chat-last-awake", Date.now());
-        return true;
+        return false;
+      } catch (err) {
+        setError(err.message);
+        return false;
+      } finally {
+        setIsWaking(false);
+        wakePromiseRef.current = null;
       }
-    } catch (err) {
-      setError(err.message);
-    }
-    return false;
+    })();
+
+    return wakePromiseRef.current;
   }
   React.useEffect(() => {
     if (chatState === ChatState.ASLEEP) {
@@ -583,6 +657,8 @@ export function useBackendChat({
       persona,
       setChatState,
       setError,
+      setLatestAgentStep,
+      setDocumentCount,
       qgenAsistantId,
       enableQgen,
       onMessageHistoryChange: setMessageHistory
@@ -611,6 +687,7 @@ export function useBackendChat({
       setError(null);
       setChatState(ChatState.SUBMITTING);
       setMessageToSubmit(input);
+      setLastSubmittedMessage(input.message || '');
     },
     [chatState],
   );
@@ -624,16 +701,39 @@ export function useBackendChat({
 
     const onSubmit = submitHandler.current?.onSubmit;
 
-    try {
-      onSubmit(messageToSubmit);
-    } catch (errorReason) {
-      setChatState(ChatState.ERRORED);
-      setError(
-        errorReason instanceof Error ? errorReason.message : errorReason,
-      );
+    // Ensure backend is awake before submitting
+    async function submitWithWake() {
+      try {
+        // Use the shared wake function to avoid duplicate health checks
+        const isAwake = await wake(ChatState.SUBMITTING);
+        if (!isAwake) {
+          setError("Failed to connect to the chat backend. Please try again.");
+          return;
+        }
+        await onSubmit(messageToSubmit);
+      } catch (errorReason) {
+        setChatState(ChatState.ERRORED);
+        setError(
+          errorReason instanceof Error ? errorReason.message : errorReason,
+        );
+      }
     }
+
+    submitWithWake();
     setMessageToSubmit(null);
-  }, [messageToSubmit, chatState, wake]);
+  }, [messageToSubmit, chatState]);
+
+  // Clear the last submitted message when we start streaming (success)
+  // Clear latestAgentStep and documentCount when done streaming (READY state)
+  React.useEffect(() => {
+    if (chatState === ChatState.STREAMING) {
+      setLastSubmittedMessage('');
+    }
+    if (chatState === ChatState.READY) {
+      setLatestAgentStep(null);
+      setDocumentCount(0);
+    }
+  }, [chatState]);
 
   return {
     messages: messageHistory,
@@ -642,5 +742,10 @@ export function useBackendChat({
     error,
     clearChat,
     wake,
+    lastSubmittedMessage,
+    clearLastSubmittedMessage: () => setLastSubmittedMessage(''),
+    latestAgentStep,
+    documentCount,
+    isWaking,
   };
 }
