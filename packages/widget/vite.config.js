@@ -30,6 +30,11 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 // answer died on "is not a function". pnpm already resolves these correctly per
 // importer; the alias was overriding that.
 const SHARED_DEPS = [
+  // react-markdown is aliased for the version, not just the location: the
+  // components pass v6-shaped `components` props (reading node.children[0].value),
+  // and a bare specifier from ../../src resolves up to onyx/node_modules, which
+  // holds v10. v10 renders nothing and throws inside its own transform.
+  'react-markdown',
   'semantic-ui-react',
   'react-dom',
   'react',

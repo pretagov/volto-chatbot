@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import { sourcesForSelectedMessage } from '#stores/sidebarStore';
 import { SourcesView } from './SourcesView.jsx';
 
@@ -21,9 +21,41 @@ afterEach(() => {
 });
 
 describe('SourcesView', () => {
-  it('shows nothing until a message asks for its sources', () => {
+  it('stays out of the conversation until a message asks for its sources', () => {
+    render(<SourcesView />);
+    // Mounted so it can slide, but not exposed: no dialog, nothing focusable.
+    expect(screen.queryByRole('dialog')).toBe(null);
+    expect(screen.queryByRole('button', { name: /close sources/i })).toBe(null);
+  });
+
+  it('is a side panel that slides in, not a screen that replaces the chat', () => {
     const { container } = render(<SourcesView />);
-    expect(container.innerHTML).toBe('');
+    const panel = container.querySelector('.chat-sources');
+    expect(panel).toBeTruthy();
+    expect(panel.className).not.toContain('chat-sources--open');
+    expect(panel.getAttribute('aria-hidden')).toBe('true');
+
+    act(() => sourcesForSelectedMessage.set(SOURCES));
+    expect(container.querySelector('.chat-sources').className).toContain(
+      'chat-sources--open',
+    );
+    expect(container.querySelector('.chat-sources').getAttribute('aria-hidden')).toBe(
+      null,
+    );
+  });
+
+  it('closes when the conversation behind it is tapped', () => {
+    sourcesForSelectedMessage.set(SOURCES);
+    render(<SourcesView />);
+    fireEvent.click(screen.getByRole('button', { name: /dismiss sources/i }));
+    expect(sourcesForSelectedMessage.get()).toEqual([]);
+  });
+
+  it('closes on Escape, since the close control scrolls out of reach', () => {
+    sourcesForSelectedMessage.set(SOURCES);
+    render(<SourcesView />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(sourcesForSelectedMessage.get()).toEqual([]);
   });
 
   it('lists every source, not just the three shown inline', () => {
