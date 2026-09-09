@@ -232,13 +232,17 @@ body {
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
   transform: translateX(100%);
   visibility: hidden;
-  transition: transform 0.22s ease, visibility 0s linear 0.22s;
+  transition:
+    transform 0.22s ease,
+    visibility 0s linear 0.22s;
 }
 
 .chat-sources--open {
   transform: translateX(0);
   visibility: visible;
-  transition: transform 0.22s ease, visibility 0s;
+  transition:
+    transform 0.22s ease,
+    visibility 0s;
 }
 
 /* Wide enough for both: the sources take their own column and the answer keeps
@@ -275,13 +279,17 @@ body {
   cursor: pointer;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.22s ease, visibility 0s linear 0.22s;
+  transition:
+    opacity 0.22s ease,
+    visibility 0s linear 0.22s;
 }
 
 .chat-sources__scrim--open {
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.22s ease, visibility 0s;
+  transition:
+    opacity 0.22s ease,
+    visibility 0s;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -355,4 +363,41 @@ body {
   margin: 0.3rem 0 0;
   font-size: 0.85rem;
   color: #555;
+}
+
+/* Keyboard focus.
+ *
+ * The add-on rings its own controls (sources, citations, thinking box) but not
+ * the composer: it strips the textarea's border and background, so Semantic
+ * UI's focus style lands on an invisible element. The ring goes on the wrapper
+ * instead, which is the box a reader sees. The shell's own buttons - launcher,
+ * close, scrim - had no focus style at all. */
+:root {
+  --chat-focus: var(--chat-accent);
+  --chat-focus-inverse: #fff;
+}
+
+.chat-panel .chat-form .textarea-wrapper:focus-within {
+  outline: 2px solid var(--chat-focus);
+  outline-offset: 2px;
+}
+
+.chat-launcher:focus-visible,
+.chat-sources__scrim:focus-visible,
+.chat-panel .chat-form .ui.button.submit-btn:focus-visible {
+  outline: 2px solid var(--chat-focus);
+  outline-offset: 2px;
+}
+
+/* On the accent header the accent ring would be invisible, so these take the
+   header's own colour. Inset, because the panel clips at its border. */
+.chat-panel__header button:focus-visible,
+.chat-sources__header button:focus-visible {
+  outline: 2px solid var(--chat-focus-inverse);
+  outline-offset: -2px;
+}
+
+.chat-sources__body a:focus-visible {
+  outline: 2px solid var(--chat-focus);
+  outline-offset: 2px;
 }
