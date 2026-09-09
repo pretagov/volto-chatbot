@@ -147,13 +147,41 @@ body {
   flex-direction: row;
 }
 
-/* Scrolls internally so the header stays put. */
+/* Holds the chat; the conversation inside it is what scrolls. Scrolling here
+   instead carried the composer up out of view with the conversation, so the
+   place to type moved as the answer grew. */
 .chat-panel__body {
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  display: flex;
+  overflow: hidden;
+}
+
+.chat-panel__body .chat-window {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The conversation takes the space the composer does not, and scrolls within
+   it. min-height:0 because a flex item will not shrink below its content
+   otherwise, and the messages would push the composer off the frame. */
+.chat-panel__body .messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 0.75rem 1rem;
+}
+
+/* Sits at the bottom, always reachable, and reads as its own surface rather
+   than as the last thing in the transcript. */
+.chat-panel__body .chat-form {
+  flex: 0 0 auto;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--chat-border);
+  background: var(--chat-surface);
 }
 
 /* A flex item's automatic minimum size is its content, so the message column

@@ -4,6 +4,12 @@
 // come from the embed's data- attributes, in the same shape, so the components
 // take identical config either way.
 export const DEFAULTS = {
+  // The panel is an iframe, so it inherits no typography from the page around
+  // it — unlike the Volto sidebar, which sits in the page and picks up the
+  // site's own face. A host that wants the widget to look like part of its site
+  // passes its stack in; this is what renders until then.
+  fontFamily:
+    'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   chatTitle: 'Ask a question',
   placeholderPrompt: 'Ask me anything…',
   starterPromptsHeading: '',
