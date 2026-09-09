@@ -117,6 +117,25 @@ export function translateRequest(body, onyxPath = '') {
     return { ...source };
   }
 
+  // Feedback is not a chat turn and shares none of its field names. Running it
+  // through the SendMessageRequest allowlist below reduced it to {message: ''},
+  // dropping the id of the message being rated and the verdict itself, so the
+  // thumbs up/down on the embedded chat could never succeed. It gets its own
+  // allowlist rather than a passthrough, for the same reason the one below is
+  // an allowlist: a field added upstream later is excluded by default.
+  if (onyxPath.includes('create-chat-message-feedback')) {
+    const feedback = {};
+    for (const key of [
+      'chat_message_id',
+      'is_positive',
+      'feedback_text',
+      'predefined_feedback',
+    ]) {
+      if (source[key] !== undefined) feedback[key] = source[key];
+    }
+    return feedback;
+  }
+
   const request = { message: source.message ?? '' };
 
   // Allowlist, not a denylist: SendMessageRequest carries fields that are unsafe to

@@ -154,6 +154,51 @@ describe('translateRequest', () => {
   });
 });
 
+describe('translateRequest for feedback', () => {
+  // The allowlist below belongs to SendMessageRequest, and it was applied to
+  // every request that was not session creation. A feedback body shares none of
+  // those field names, so it came out as {message: ''} — the message id and the
+  // verdict stripped — and the thumbs up/down on the embedded chat could never
+  // succeed.
+  const feedback = {
+    chat_message_id: 42,
+    is_positive: true,
+    feedback_text: 'helpful',
+  };
+
+  it('keeps the message the feedback is about', () => {
+    const out = translateRequest(feedback, '/api/chat/create-chat-message-feedback');
+    expect(out.chat_message_id).toBe(42);
+  });
+
+  it('keeps the verdict', () => {
+    const out = translateRequest(feedback, '/api/chat/create-chat-message-feedback');
+    expect(out.is_positive).toBe(true);
+  });
+
+  it('keeps a negative verdict and its reason', () => {
+    const out = translateRequest(
+      { chat_message_id: 7, is_positive: false, predefined_feedback: 'Wrong answer' },
+      '/api/chat/create-chat-message-feedback',
+    );
+    expect(out.is_positive).toBe(false);
+    expect(out.predefined_feedback).toBe('Wrong answer');
+  });
+
+  it('does not turn feedback into an empty chat message', () => {
+    const out = translateRequest(feedback, '/api/chat/create-chat-message-feedback');
+    expect(out.message).toBeUndefined();
+  });
+
+  it('still strips the fields that are unsafe from a browser', () => {
+    const out = translateRequest(
+      { ...feedback, internal_search_filters: { document_set: ['secret'] } },
+      '/api/chat/create-chat-message-feedback',
+    );
+    expect(out.internal_search_filters).toBeUndefined();
+  });
+});
+
 describe('createTranslateStream', () => {
   async function run(chunks) {
     const stream = createTranslateStream();
