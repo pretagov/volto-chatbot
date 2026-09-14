@@ -14,9 +14,19 @@ export default React.forwardRef(function AutoResizeTextarea(props, ref) {
     disableSubmit,
     enableMatomoTracking,
     persona,
+    restoreMessage = '',
+    onRestoreMessageUsed = () => {},
     ...rest
   } = props;
   const [input, setInput] = React.useState('');
+
+  // Restore the message in the input when an error occurs
+  React.useEffect(() => {
+    if (restoreMessage) {
+      setInput(restoreMessage);
+      onRestoreMessageUsed();
+    }
+  }, [restoreMessage, onRestoreMessageUsed]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

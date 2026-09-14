@@ -1,4 +1,5 @@
 import { Popup } from 'semantic-ui-react';
+import { getSourceDisplayName } from './utils';
 
 export function Citation({ link, index, value, message }) {
   const isLinkType = value?.toString().startsWith('[');
@@ -9,59 +10,79 @@ export function Citation({ link, index, value, message }) {
   const document = isLinkType
     ? message.documents[(parseInt(innerText) - 1).toString()]
     : message.documents[value];
-  // console.log('dd', document, message.documents, value, isLinkType);
 
-  const handleClick = (event) => {
+  const displayName = getSourceDisplayName(document);
+
+  const handleClick = () => {
     if (link) {
-      event.preventDefault();
       window.open(link, '_blank');
     }
   };
 
-  const content = link ? (
-    <div>
-      <p>
-        <a href={link} tabIndex="-1" onClick={handleClick}>
-          {link}
-        </a>
-      </p>
+  // Build popup content - card style with number, title, and snippet
+  const popupContent = (
+    <div className="citation-popup-content">
+      {/* Citation number circle */}
+      <div className="citation-popup-number">{innerText}</div>
 
-      {document?.match_highlights?.map((text, i) =>
-        text ? (
-          <p key={i} dangerouslySetInnerHTML={{ __html: `...${text}...` }} />
-        ) : null,
-      )}
-    </div>
-  ) : (
-    <div>This doc doesn't have a link.</div>
-  );
+      {/* Content body */}
+      <div className="citation-popup-body">
+        {/* Title with optional link */}
+        <div className="citation-popup-header">
+          {link ? (
+            <a
+              href={link}
+              target="_blank"
+              rel="noreferrer"
+              className="citation-popup-title-link"
+              onClick={(e) => e.stopPropagation()}
+              title={displayName}
+            >
+              {displayName}
+            </a>
+          ) : (
+            <span className="citation-popup-title" title={displayName}>{displayName}</span>
+          )}
+        </div>
 
-  const popupContent = isLinkType ? (
-    content
-  ) : (
-    <div>
-      {document?.match_highlights?.map((text, i) => (
-        <div key={i} dangerouslySetInnerHTML={{ __html: text }} />
-      ))}
+        {/* Match highlights as snippet */}
+        {document?.match_highlights?.filter(Boolean).length > 0 && (
+          <div className="citation-popup-highlights">
+            <p dangerouslySetInnerHTML={{
+              __html: document.match_highlights.filter(Boolean)[0]
+            }} />
+          </div>
+        )}
+
+        {/* Fallback if no highlights */}
+        {!document?.match_highlights?.filter(Boolean).length && (
+          <p className="citation-popup-no-content">
+            {document?.blurb ? document.blurb.slice(0, 80) + '...' : 'No preview available'}
+          </p>
+        )}
+      </div>
     </div>
   );
 
   return (
-    <>
-      {link ? (
-        <a href={link} tabIndex="-1" onClick={handleClick}>
-          <span className="chat-citation">{innerText}</span>
-        </a>
-      ) : (
-        <Popup
-          on="click"
-          wide="very"
-          content={popupContent}
-          header={!isLinkType ? document.semantic_identifier : undefined}
-          trigger={<span className="chat-citation">{innerText}</span>}
-          popper={{ id: 'chat-citation-popup' }}
-        />
-      )}
-    </>
+    <Popup
+      on="hover"
+      hoverable
+      wide="very"
+      position="top center"
+      mouseEnterDelay={200}
+      mouseLeaveDelay={300}
+      content={popupContent}
+      trigger={
+        <span
+          className="chat-citation"
+          onClick={handleClick}
+          style={{ cursor: link ? 'pointer' : 'default' }}
+        >
+          {innerText}
+        </span>
+      }
+      popper={{ id: 'chat-citation-popup' }}
+    />
   );
 }

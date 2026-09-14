@@ -1,17 +1,16 @@
 import { trackEvent } from "@eeacms/volto-matomo/utils";
 import { injectLazyLibs } from "@plone/volto/helpers/Loadable";
 import React from "react";
-import { Button, Checkbox, Form, Popup, Segment } from "semantic-ui-react";
+import { Checkbox, Form, Popup } from "semantic-ui-react";
 
-import PenIcon from "./../icons/square-pen.svg";
 import AutoResizeTextarea from "./AutoResizeTextarea";
-import { ChatMessageBubble } from "./ChatMessageBubble";
+import { ChatMessageBubble, PendingResponseBubble } from "./ChatMessageBubble";
 import EmptyState from "./EmptyState";
 import { useScrollonStream } from "./lib";
 import { useBackendChat, ChatState } from './useBackendChat';
-import { SVGIcon } from './utils';
 
-import { sourcesForSelectedMessage } from "#stores/sidebarStore";
+import { sourcesForSelectedMessage, newChatTrigger } from "#stores/sidebarStore";
+import { useStore } from "@nanostores/react";
 import { usePrevious } from "@plone/volto/helpers";
 
 import "./style.less";
@@ -40,7 +39,6 @@ function ChatWindow({
     noSupportDocumentsMessage,
     totalFailMessage,
     enableShowTotalFailMessage,
-    showAssistantTitle,
     showAssistantDescription,
     starterPromptsPosition = "top",
     enableMatomoTracking,
@@ -55,6 +53,11 @@ function ChatWindow({
     clearChat,
     error,
     wake,
+    lastSubmittedMessage,
+    clearLastSubmittedMessage,
+    latestAgentStep,
+    documentCount,
+    isWaking,
   } = useBackendChat({
     persona: data.assistant,
     qgenAsistantId,
@@ -90,6 +93,15 @@ function ChatWindow({
     setShowLandingPage(true);
   };
 
+  // Listen for new chat trigger from sidebar
+  const $newChatTrigger = useStore(newChatTrigger);
+  const prevTrigger = usePrevious($newChatTrigger);
+  React.useEffect(() => {
+    if (prevTrigger !== undefined && $newChatTrigger !== prevTrigger) {
+      handleClearChat();
+    }
+  }, [$newChatTrigger]);
+
   React.useEffect(() => {
     setShowLandingPage(messages.length === 0);
   }, [messages]);
@@ -118,9 +130,16 @@ function ChatWindow({
   return (
     <div className="chat-window">
       <div className="messages">
+        {/* Show pending status on landing page only after user submits (not during background wake on focus) */}
+        {showLandingPage && chatState === ChatState.SUBMITTING && (
+          <PendingResponseBubble
+            latestAgentStep={latestAgentStep}
+            documentCount={documentCount}
+            isWaking={isWaking}
+          />
+        )}
         {showLandingPage ? (
           <>
-            {persona && showAssistantTitle && <h2>{persona.name}</h2>}
             {persona && showAssistantDescription && (
               <p>{persona.description}</p>
             )}
@@ -140,16 +159,6 @@ function ChatWindow({
           </>
         ) : (
           <>
-            <Segment clearing basic>
-              <Button
-                disabled={isStreaming}
-                onClick={handleClearChat}
-                className="right floated clear-chat"
-                aria-label="Clear chat"
-              >
-                <SVGIcon name={PenIcon} /> New chat
-              </Button>
-            </Segment>
             <div
               ref={conversationRef}
               className={`conversation ${height ? "include-scrollbar" : ""}`}
@@ -159,7 +168,7 @@ function ChatWindow({
                 <ChatMessageBubble
                   key={m.messageId}
                   message={m}
-                  isMostRecent={index === 0}
+                  isMostRecent={index === messages.length - 1}
                   isLoading={isStreaming}
                   enableFeedback={enableFeedback}
                   feedbackReasons={feedbackReasons}
@@ -179,15 +188,23 @@ function ChatWindow({
                   enableMatomoTracking={enableMatomoTracking}
                   persona={persona}
                   blockData={data}
+                  latestAgentStep={latestAgentStep}
+                  documentCount={documentCount}
+                  isWaking={isWaking}
                 />
               ))}
+              {/* Show pending response bubble when waiting and no assistant message exists yet */}
+              {[ChatState.SUBMITTING, ChatState.STREAMING].includes(chatState) &&
+                (messages.length === 0 || messages[messages.length - 1]?.type === 'user') && (
+                <PendingResponseBubble
+                  latestAgentStep={latestAgentStep}
+                  documentCount={documentCount}
+                  isWaking={isWaking}
+                />
+              )}
               <div ref={endDivRef} /> {/* End div to mark the bottom */}
             </div>
           </>
-        )}
-        {/* TODO: Only show this if it's taking a while to prevent flashing. Could cause WCAG SC 2.3.1 failure. */}
-        {[ChatState.STREAMING, ChatState.SUBMITTING].includes(chatState) && (
-          <div className="loader" />
         )}
       </div>
 
@@ -215,6 +232,8 @@ function ChatWindow({
               )}
               enableMatomoTracking={enableMatomoTracking}
               persona={persona}
+              restoreMessage={error ? lastSubmittedMessage : ''}
+              onRestoreMessageUsed={clearLastSubmittedMessage}
               onSubmit={(submitHandlerInput) => {
                 sourcesForSelectedMessage.set([]);
                 onSubmit(submitHandlerInput);

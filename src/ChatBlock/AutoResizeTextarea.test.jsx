@@ -46,4 +46,34 @@ describe('AutoResizeTextarea', () => {
 
     expect(textarea.value).toBe('Line 1\n');
   });
+
+  it('restores message when restoreMessage prop is provided', () => {
+    const mockRestoreUsed = jest.fn();
+    const { getByRole } = render(
+      <AutoResizeTextarea
+        onSubmit={jest.fn()}
+        restoreMessage="My failed message"
+        onRestoreMessageUsed={mockRestoreUsed}
+      />,
+    );
+    const textarea = getByRole('textbox');
+
+    expect(textarea.value).toBe('My failed message');
+    expect(mockRestoreUsed).toHaveBeenCalled();
+  });
+
+  it('does not restore when restoreMessage is empty', () => {
+    const mockRestoreUsed = jest.fn();
+    const { getByRole } = render(
+      <AutoResizeTextarea
+        onSubmit={jest.fn()}
+        restoreMessage=""
+        onRestoreMessageUsed={mockRestoreUsed}
+      />,
+    );
+    const textarea = getByRole('textbox');
+
+    expect(textarea.value).toBe('');
+    expect(mockRestoreUsed).not.toHaveBeenCalled();
+  });
 });
