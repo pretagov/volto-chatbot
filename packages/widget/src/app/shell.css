@@ -160,7 +160,13 @@ body {
 
 .chat-panel__body .chat-window {
   flex: 1 1 auto;
+  /* Both axes, for the same reason: a flex item's automatic minimum size is its
+     content, so without these the column sizes itself to the widest thing in
+     the answer - on a 320px screen it reached 974px. The panel clips with
+     overflow:hidden, so the text was cut off rather than scrollable, and
+     #root.scrollWidth still read 320 as though nothing were wrong. */
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
