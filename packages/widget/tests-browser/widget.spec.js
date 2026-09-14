@@ -71,7 +71,7 @@ const ANSWER =
   }) +
   packet({ type: "stop" });
 
-async function stubOnyx(page) {
+async function stubOnyx(page, answer = ANSWER) {
   await page.route(`${ONYX}/**`, async (route) => {
     const url = route.request().url();
     if (url.includes("create-chat-session")) {
@@ -85,7 +85,7 @@ async function stubOnyx(page) {
       return route.fulfill({
         status: 200,
         contentType: "application/x-ndjson",
-        body: ANSWER,
+        body: answer,
       });
     }
     return route.fulfill({
@@ -367,11 +367,46 @@ test("does not force a tool when the embed opts out", async ({ page }) => {
 // A flex item's automatic minimum size is its content, so a message column
 // without min-width:0 sizes itself to the widest thing in the answer rather
 // than to the panel. An ancestor clips with overflow:hidden, so nothing
-// scrolls and #root.scrollWidth still reports the viewport width - the text is
-// cut off, not reachable, and a naive overflow check sees nothing wrong.
+// scrolls and document.scrollWidth still reports the viewport width - the text
+// is cut off, not reachable, and a page-level overflow check sees nothing
+// wrong. That is why the two tests above passed throughout: one measures
+// .chat-panel, which was always the right size, and the other measures
+// page-level scroll, which the clipping ancestor hides.
+//
+// The answer here is deliberately wide - many sources and a long unbroken
+// token - because the pressure has to come from the fixture rather than from
+// luck. With the ordinary stub the column reached 532px against a 320px panel;
+// a shorter answer would have left this green while the bug was still there.
+const WIDE_DOCUMENTS = Array.from({ length: 8 }, (_, index) => ({
+  document_id: `doc-${index}`,
+  semantic_identifier: `A source with a fairly long title, number ${index + 1}`,
+  link: `https://www.example.gov.uk/a/deep/path/to/source-${index}`,
+  blurb: "Enough text to give the card its natural width.",
+  source_type: "web",
+}));
+
+const WIDE_ANSWER =
+  packet({ type: "search_tool_documents_delta", documents: WIDE_DOCUMENTS }) +
+  packet({ type: "message_start", final_documents: WIDE_DOCUMENTS }) +
+  packet({
+    type: "message_delta",
+    content: "## Paying\n\nUse **Direct Debit**. ",
+  }) +
+  packet({
+    type: "message_delta",
+    content:
+      "Reference https://www.example.gov.uk/a/very/long/unbroken/path/that/cannot/wrap/anywhere/at/all ",
+  }) +
+  packet({
+    type: "message_delta",
+    content: "and see the table of bands. [[1]]()",
+  }) +
+  packet({ type: "citation_info", citation_number: 1, document_id: "doc-0" }) +
+  packet({ type: "stop" });
+
 test("keeps a rendered answer inside a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await stubOnyx(page);
+  await stubOnyx(page, WIDE_ANSWER);
   await page.goto(WIDGET());
 
   const input = page.locator('textarea[placeholder="Ask me anything…"]');
@@ -390,12 +425,16 @@ test("keeps a rendered answer inside a narrow screen", async ({ page }) => {
   expect(await width(".chat-window")).toBeLessThanOrEqual(320);
   expect(await width(".messages")).toBeLessThanOrEqual(320);
 
-  // Nothing in the conversation may stick out past the panel.
-  const overflowing = await page.evaluate(
-    () =>
-      [...document.querySelectorAll(".messages *")].filter(
-        (el) => el.getBoundingClientRect().width > window.innerWidth,
-      ).length,
+  // The words have to be readable, not merely inside a box of the right size:
+  // the symptom was lines sliced off at the right edge. Nothing the reader is
+  // meant to read may start left of the panel or end right of it.
+  const clipped = await page.evaluate(() =>
+    [...document.querySelectorAll(".messages p, .messages li, .messages h2")]
+      .filter((el) => {
+        const rect = el.getBoundingClientRect();
+        return rect.left < 0 || rect.right > window.innerWidth + 1;
+      })
+      .map((el) => el.textContent.slice(0, 40)),
   );
-  expect(overflowing).toBe(0);
+  expect(clipped).toEqual([]);
 });
